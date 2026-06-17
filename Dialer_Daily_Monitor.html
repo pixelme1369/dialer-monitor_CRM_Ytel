@@ -647,29 +647,37 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   // ── Agent table ──
   const agentMap={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
-    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,lt2m:0,b2to10m:0,gt15m:0,gt30m:0,phones:new Set(),enrolledPhones:new Set()};
+    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,phoneBest:{},phones:new Set(),enrolledPhones:new Set()};
     const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
-    if(r._sec<120) d.lt2m++;
-    if(r._sec>=120&&r._sec<600) d.b2to10m++;
-    if(r._sec>900) d.gt15m++;
-    if(r._sec>1800) d.gt30m++;
-    if(r._phone) d.phones.add(r._phone);
+    if(r._phone){
+      d.phones.add(r._phone);
+      // track longest call per phone for this agent
+      if(!d.phoneBest[r._phone]||r._sec>d.phoneBest[r._phone]) d.phoneBest[r._phone]=r._sec;
+    }
   });
 
   const agentRows=Object.entries(agentMap)
     .map(([name,d])=>{
       const uniqueCalls=d.phones.size;
+      // bucket by longest call per unique phone
+      let lt2m=0,b2to10m=0,gt15m=0,gt30m=0;
+      Object.values(d.phoneBest).forEach(best=>{
+        if(best>1800) gt30m++;
+        else if(best>900) gt15m++;
+        else if(best>=120) b2to10m++;
+        else lt2m++;
+      });
       const credit=agentEnrollCredit[name.toLowerCase()]||{count:0,debt:0};
       const enr=credit.count;
       const debt=credit.debt;
-      return {...d,name,uniqueCalls,enr,debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
+      return {...d,name,uniqueCalls,lt2m,b2to10m,gt15m,gt30m,enr,debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
   document.getElementById('agentCount').textContent=agentRows.length+' agents';
   document.getElementById('agentBody').innerHTML=agentRows.map(a=>{
-    const convPct=a.gt15m>0&&a.enr>0?pct(a.enr,a.gt15m):'—';
+    const convPct=a.gt15m>0?pct(a.enr,a.gt15m):'—';
     const shortCls=a.shortPct>55?'bad':'';
     return `<tr>
       <td>${a.name}</td>
