@@ -555,7 +555,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     {label:'Conv Rate (mkt)',val:mktCalls.length?pct(totalEnrolled,mktCalls.length):'—',sub:'enrolled / mkt calls',cls:'green'},
     {label:'Total Debt Enrolled',val:totalDebt>0?fmt$(totalDebt):'—',sub:'sum of Enrolled Debt',cls:'green'},
     {label:'Dead ≤30s',val:deadCalls.toLocaleString(),sub:pct(deadCalls,total)+' wasted',cls:'red'},
-    {label:'DNC Still Dialed',val:dncCount,sub:dncUnique+' unique numbers · '+pct(dncCount,total),cls:'red'},
+    {label:'DNC Still Dialed',val:dncCount,sub:dncUnique+' unique · '+pct(dncUnique,uniquePhones)+' of unique calls',cls:'red'},
     {label:'Drop / Timeout',val:drops,sub:pct(drops,total)+' drop rate',cls:'amber'},
     {label:'< 2 Min (Lost)',val:lt2m.toLocaleString(),sub:pct(lt2m,total)+' of total',cls:'red'},
     {label:'2 – 10 Min',val:b2to10m.toLocaleString(),sub:pct(b2to10m,total)+' of total',cls:'amber'},
@@ -577,7 +577,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   const dropPct=drops/total*100;
 
   if(vdclAfterHours>10) issues.push({sev:'crit',title:'Dialer running after hours — '+vdclAfterHours+' VDCL drops after 6pm',detail:'Agents are off but the dialer keeps firing inbound leads. Callers hit dead air, leads are burned. Fix: set campaign end-time in Ytel and add an after-hours IVR.'});
-  if(dncCount>20) issues.push({sev:'crit',title:dncCount+' DNC calls across '+dncUnique+' unique numbers ('+pct(dncCount,total)+')',detail:'Compliance risk. These numbers have been flagged Do Not Call but are still in active rotation. Fix: run a DNC scrub now and enable auto-suppression in Ytel.'});
+  if(dncCount>20) issues.push({sev:'crit',title:dncCount+' DNC calls · '+dncUnique+' unique numbers ('+pct(dncUnique,uniquePhones)+' of unique calls)',detail:'Compliance risk. These numbers have been flagged Do Not Call but are still in active rotation. Fix: run a DNC scrub now and enable auto-suppression in Ytel.'});
 
   const plrDrops=vdclCalls.filter(r=>r._campaign==='PLR').length;
   if(plrDrops>30) issues.push({sev:'crit',title:'PLR campaign producing '+plrDrops+' VDCL drops — campaign likely broken',detail:'Agent availability config on PLR is wrong. The campaign is generating more drops than conversations. Fix: pause PLR, audit agent assignment and queue overflow rules, then re-enable.'});
