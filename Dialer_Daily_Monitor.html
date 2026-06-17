@@ -235,7 +235,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
             <th>Unique #s</th>
             <th>Short% ≤30s</th>
             <th>&lt;2 min</th>
-            <th>&lt;10 min</th>
+            <th>2–10 min</th>
             <th>&gt;15 min</th>
             <th>&gt;30 min</th>
             <th>Avg Talk</th>
@@ -534,9 +534,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   const totalSec=calls.reduce((a,r)=>a+r._sec,0);
   const mktCalls=calls.filter(r=>r._type==='Marketing');
   const vdclCalls=calls.filter(r=>r._type==='VDCL');
-  const gt2m=calls.filter(r=>r._sec>120).length;
   const lt2m=calls.filter(r=>r._sec<120).length;
-  const lt10m=calls.filter(r=>r._sec<600).length;
+  const b2to10m=calls.filter(r=>r._sec>=120&&r._sec<600).length;
   const gt15m=calls.filter(r=>r._sec>900).length;
   const gt30m=calls.filter(r=>r._sec>1800).length;
   const deadCalls=calls.filter(r=>r._sec<=30).length;
@@ -556,10 +555,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     {label:'Dead ≤30s',val:deadCalls.toLocaleString(),sub:pct(deadCalls,total)+' wasted',cls:'red'},
     {label:'DNC Still Dialed',val:dncCount,sub:pct(dncCount,total)+' compliance risk',cls:'red'},
     {label:'Drop / Timeout',val:drops,sub:pct(drops,total)+' drop rate',cls:'amber'},
-    {label:'< 2 Min Calls',val:lt2m.toLocaleString(),sub:pct(lt2m,total)+' of total',cls:'amber'},
-    {label:'< 10 Min Calls',val:lt10m.toLocaleString(),sub:pct(lt10m,total)+' of total',cls:'amber'},
-    {label:'> 15 Min Calls',val:gt15m.toLocaleString(),sub:pct(gt15m,total)+' deep engage',cls:'purple'},
-    {label:'> 30 Min Calls',val:gt30m.toLocaleString(),sub:pct(gt30m,total)+' of total',cls:'purple'},
+    {label:'< 2 Min (Lost)',val:lt2m.toLocaleString(),sub:pct(lt2m,total)+' of total',cls:'red'},
+    {label:'2 – 10 Min',val:b2to10m.toLocaleString(),sub:pct(b2to10m,total)+' of total',cls:'amber'},
+    {label:'> 15 Min',val:gt15m.toLocaleString(),sub:pct(gt15m,total)+' deep engage',cls:'green'},
+    {label:'> 30 Min',val:gt30m.toLocaleString(),sub:pct(gt30m,total)+' of total',cls:'purple'},
     {label:'Total Talk Time',val:fmtDur(totalSec),sub:'all agents',cls:'blue'},
   ];
   document.getElementById('kpiGrid').innerHTML=kpiData.map(k=>`
@@ -648,11 +647,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   // ── Agent table ──
   const agentMap={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
-    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,lt2m:0,lt10m:0,gt15m:0,gt30m:0,phones:new Set(),enrolledPhones:new Set()};
+    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,lt2m:0,b2to10m:0,gt15m:0,gt30m:0,phones:new Set(),enrolledPhones:new Set()};
     const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
     if(r._sec<120) d.lt2m++;
-    if(r._sec<600) d.lt10m++;
+    if(r._sec>=120&&r._sec<600) d.b2to10m++;
     if(r._sec>900) d.gt15m++;
     if(r._sec>1800) d.gt30m++;
     if(r._phone) d.phones.add(r._phone);
@@ -678,7 +677,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       <td>${a.uniqueCalls}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg ${shortCls}" style="width:${a.shortPct.toFixed(0)}%"></div></div>${a.shortPct.toFixed(0)}%</div></td>
       <td>${a.lt2m}</td>
-      <td>${a.lt10m}</td>
+      <td>${a.b2to10m}</td>
       <td>${a.gt15m}</td>
       <td>${a.gt30m}</td>
       <td>${fmtDur(a.avg)}</td>
