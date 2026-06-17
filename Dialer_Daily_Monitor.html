@@ -232,6 +232,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
           <tr>
             <th style="text-align:left;min-width:160px">Agent</th>
             <th>Calls</th>
+            <th>Unique #s</th>
             <th>Short% ≤30s</th>
             <th>&gt;2 min</th>
             <th>&gt;10 min</th>
@@ -458,11 +459,9 @@ function runAnalysis(){
 
   if(calls.length===0){ showToast('No calls found for '+dateStr+' — check the date'); return; }
 
-  // Enrolled = Closers only, enrollment date matches call date, one per unique phone number
+  // Enrolled = deduped by phone_number across all agents, enrollment date must match call date
   const seenPhones=new Set();
   const enrolledRows=calls.filter(r=>{
-    const ug=(r['user_group']||'').trim();
-    if(ug!=='Closers') return false;
     const v=r['Cordoba Enrolled Date']||r['Enrolled Date']||'';
     if(getDateStr(v)!==dateStr) return false;
     const phone=(r['phone_number']||r['phone_number_dialed']||'').trim();
@@ -470,6 +469,8 @@ function runAnalysis(){
     seenPhones.add(phone);
     return true;
   });
+  // Set of all enrolled phone numbers (for per-agent lookup)
+  const enrolledPhones=new Set(enrolledRows.map(r=>(r['phone_number']||r['phone_number_dialed']||'').trim()));
 
   document.getElementById('hdrDate').textContent=dateStr;
   document.getElementById('filterHint').textContent=
@@ -491,18 +492,10 @@ function buildDashboard(calls, enrolledRows, dateStr){
     r._statusName=(r['status_name']||r['Status Name']||r['dispo']||r._status).trim();
     r._hour=(String(r['call_date']||r['date']||'')).slice(11,13)||'00';
     r._ug=(r['user_group']||'').trim();
-    r._enrolled=getDateStr(r['Cordoba Enrolled Date']||r['Enrolled Date']||'')===dateStr && (r['user_group']||'').trim()==='Closers';
+    r._phone=(r['phone_number']||r['phone_number_dialed']||'').trim();
+    r._enrolled=getDateStr(r['Cordoba Enrolled Date']||r['Enrolled Date']||'')===dateStr;
     r._debt=parseDebt(r['Enrolled Debt']||0);
     r._crmStatus=(r['CRM Status']||'').trim();
-  });
-
-  // Build agent enrollment map directly from call rows
-  const enrollMap={};
-  enrolledRows.forEach(r=>{
-    const name=r._name.toLowerCase();
-    if(!enrollMap[name]) enrollMap[name]={count:0,debt:0};
-    enrollMap[name].count++;
-    enrollMap[name].debt+=r._debt;
   });
 
   const total=calls.length;
@@ -617,28 +610,41 @@ function buildDashboard(calls, enrolledRows, dateStr){
   // ── Agent table ──
   const agentMap={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
-    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0};
+    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0,phones:new Set(),enrolledPhones:new Set()};
     const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
     if(r._sec>120) d.gt2m++;
     if(r._sec>600) d.gt10m++;
     if(r._sec>1800) d.gt30m++;
+    if(r._phone) d.phones.add(r._phone);
+    // agent gets enrollment credit if this phone was enrolled (globally deduped)
+    if(r._phone && enrolledPhones.has(r._phone)) d.enrolledPhones.add(r._phone);
+  });
+
+  // Per-agent debt: sum from enrolledRows where agent name matches
+  const agentDebt={};
+  enrolledRows.forEach(r=>{
+    const name=r._name.toLowerCase();
+    agentDebt[name]=(agentDebt[name]||0)+r._debt;
   });
 
   const agentRows=Object.entries(agentMap)
     .map(([name,d])=>{
-      const enr=enrollMap[name.toLowerCase()]||{count:0,debt:0};
-      return {...d,name,enr:enr.count,debt:enr.debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
+      const uniqueCalls=d.phones.size;
+      const enr=d.enrolledPhones.size;
+      const debt=agentDebt[name.toLowerCase()]||0;
+      return {...d,name,uniqueCalls,enr,debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
   document.getElementById('agentCount').textContent=agentRows.length+' agents';
   document.getElementById('agentBody').innerHTML=agentRows.map(a=>{
-    const convPct=a.gt10m>0&&a.enr>0?pct(a.enr,a.gt10m):'—';
+    const convPct=a.uniqueCalls>0&&a.enr>0?pct(a.enr,a.uniqueCalls):'—';
     const shortCls=a.shortPct>55?'bad':'';
     return `<tr>
       <td>${a.name}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxCalls*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
+      <td>${a.uniqueCalls}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg ${shortCls}" style="width:${a.shortPct.toFixed(0)}%"></div></div>${a.shortPct.toFixed(0)}%</div></td>
       <td>${a.gt2m}</td>
       <td>${a.gt10m}</td>
