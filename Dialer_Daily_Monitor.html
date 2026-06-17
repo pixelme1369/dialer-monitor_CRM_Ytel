@@ -282,6 +282,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
           <tr>
             <th style="text-align:left">Phone Number</th>
             <th>Attempts</th>
+            <th>Inbound</th>
             <th>Agents</th>
             <th>Last Status</th>
             <th>Enrolled?</th>
@@ -417,6 +418,20 @@ function autoSetDate(data){
   }
 }
 
+// ── Timestamp parser → ms (handles "6/16/2026 0:27:09" and "2026-06-16 00:27:09") ──
+function parseTs(val){
+  if(!val) return 0;
+  if(val instanceof Date) return val.getTime();
+  const s=String(val).trim();
+  // M/D/YYYY H:MM:SS
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/);
+  if(m) return new Date(+m[3],+m[1]-1,+m[2],+m[4],+m[5],+m[6]).getTime();
+  // YYYY-MM-DD HH:MM:SS
+  const m2=s.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+  if(m2) return new Date(m2[1].replace(' ','T')).getTime();
+  return 0;
+}
+
 // ── Date normalizer ───────────────────────────────────────────────────────────
 function getDateStr(val){
   if(!val && val!==0) return '';
@@ -459,27 +474,42 @@ function runAnalysis(){
 
   if(calls.length===0){ showToast('No calls found for '+dateStr+' — check the date'); return; }
 
-  // Enrolled = deduped by phone_number across all agents, enrollment date must match call date
-  const seenPhones=new Set();
-  const enrolledRows=calls.filter(r=>{
+  // For each enrolled phone: find the last agent who talked to that client (latest timestamp)
+  // enrolledPhoneAgent[phone] = {agent, debt}
+  const enrolledPhoneAgent={};
+  calls.forEach(r=>{
     const v=r['Cordoba Enrolled Date']||r['Enrolled Date']||'';
-    if(getDateStr(v)!==dateStr) return false;
+    if(getDateStr(v)!==dateStr) return;
     const phone=(r['phone_number']||r['phone_number_dialed']||'').trim();
-    if(seenPhones.has(phone)) return false;
-    seenPhones.add(phone);
-    return true;
+    if(!phone) return;
+    const ts=parseTs(r['call_date']||r['date']||'');
+    const debt=parseDebt(r['Enrolled Debt']||0);
+    if(!enrolledPhoneAgent[phone]||ts>enrolledPhoneAgent[phone].ts){
+      enrolledPhoneAgent[phone]={agent:(r['full_name']||r['user']||'Unknown').trim(),ts,debt};
+    }
   });
-  // Set of all enrolled phone numbers (for per-agent lookup)
-  const enrolledPhones=new Set(enrolledRows.map(r=>(r['phone_number']||r['phone_number_dialed']||'').trim()));
+  // enrolledRows: one representative row per enrolled phone (for total count / debt)
+  const enrolledPhones=new Set(Object.keys(enrolledPhoneAgent));
+  const totalEnrolledCount=enrolledPhones.size;
+  const totalDebtSum=Object.values(enrolledPhoneAgent).reduce((a,v)=>a+v.debt,0);
+
+  // Per-agent enrollment credit: {agentName → {count, debt}}
+  const agentEnrollCredit={};
+  Object.values(enrolledPhoneAgent).forEach(({agent,debt})=>{
+    const k=agent.toLowerCase();
+    if(!agentEnrollCredit[k]) agentEnrollCredit[k]={count:0,debt:0};
+    agentEnrollCredit[k].count++;
+    agentEnrollCredit[k].debt+=debt;
+  });
 
   document.getElementById('hdrDate').textContent=dateStr;
   document.getElementById('filterHint').textContent=
-    calls.length.toLocaleString()+' calls · '+enrolledRows.length+' enrollments on '+dateStr;
+    calls.length.toLocaleString()+' calls · '+totalEnrolledCount+' enrollments on '+dateStr;
 
-  buildDashboard(calls, enrolledRows, dateStr);
+  buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledCount, totalDebtSum, dateStr);
 }
 
-function buildDashboard(calls, enrolledRows, dateStr){
+function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledCount, totalDebtSum, dateStr){
   // Normalize call fields
   calls.forEach(r=>{
     r._sec=parseInt(r['length_in_sec']||r['duration']||r['Duration']||r['talk_sec']||0,10)||0;
@@ -499,6 +529,7 @@ function buildDashboard(calls, enrolledRows, dateStr){
   });
 
   const total=calls.length;
+  const uniquePhones=new Set(calls.map(r=>r._phone).filter(Boolean)).size;
   const totalSec=calls.reduce((a,r)=>a+r._sec,0);
   const mktCalls=calls.filter(r=>r._type==='Marketing');
   const vdclCalls=calls.filter(r=>r._type==='VDCL');
@@ -506,14 +537,15 @@ function buildDashboard(calls, enrolledRows, dateStr){
   const gt10m=calls.filter(r=>r._sec>600).length;
   const gt30m=calls.filter(r=>r._sec>1800).length;
   const deadCalls=calls.filter(r=>r._sec<=30).length;
-  const totalEnrolled=enrolledRows.length;
-  const totalDebt=enrolledRows.reduce((a,r)=>a+r._debt,0);
+  const totalEnrolled=totalEnrolledCount;
+  const totalDebt=totalDebtSum;
   const drops=calls.filter(r=>['DROP','TIMEOT'].includes(r._status)).length;
   const dncCount=calls.filter(r=>r._status==='DNC').length;
 
   // ── KPIs ──
   const kpiData=[
     {label:'Total Calls',val:total.toLocaleString(),sub:'all dispositions',cls:'blue'},
+    {label:'Unique Calls',val:uniquePhones.toLocaleString(),sub:'distinct phone numbers',cls:'blue'},
     {label:'Marketing Calls',val:mktCalls.length,sub:pct(mktCalls.length,total)+' of total',cls:'blue'},
     {label:'Total Enrolled',val:totalEnrolled,sub:'with Cordoba Enrolled Date',cls:'green'},
     {label:'Conv Rate (mkt)',val:mktCalls.length?pct(totalEnrolled,mktCalls.length):'—',sub:'enrolled / mkt calls',cls:'green'},
@@ -617,22 +649,14 @@ function buildDashboard(calls, enrolledRows, dateStr){
     if(r._sec>600) d.gt10m++;
     if(r._sec>1800) d.gt30m++;
     if(r._phone) d.phones.add(r._phone);
-    // agent gets enrollment credit if this phone was enrolled (globally deduped)
-    if(r._phone && enrolledPhones.has(r._phone)) d.enrolledPhones.add(r._phone);
-  });
-
-  // Per-agent debt: sum from enrolledRows where agent name matches
-  const agentDebt={};
-  enrolledRows.forEach(r=>{
-    const name=r._name.toLowerCase();
-    agentDebt[name]=(agentDebt[name]||0)+r._debt;
   });
 
   const agentRows=Object.entries(agentMap)
     .map(([name,d])=>{
       const uniqueCalls=d.phones.size;
-      const enr=d.enrolledPhones.size;
-      const debt=agentDebt[name.toLowerCase()]||0;
+      const credit=agentEnrollCredit[name.toLowerCase()]||{count:0,debt:0};
+      const enr=credit.count;
+      const debt=credit.debt;
       return {...d,name,uniqueCalls,enr,debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
@@ -690,20 +714,21 @@ function buildDashboard(calls, enrolledRows, dateStr){
   // ── Top attempted numbers ──
   const phoneMap={};
   calls.forEach(r=>{
-    const phone=(r['phone_number']||r['phone_number_dialed']||'').trim();
-    if(!phone) return;
-    if(!phoneMap[phone]) phoneMap[phone]={attempts:0,agents:new Set(),lastStatus:'',enrolled:false};
+    const phone=r._phone; if(!phone) return;
+    if(!phoneMap[phone]) phoneMap[phone]={attempts:0,inbound:0,agents:new Set(),lastStatus:'',enrolled:false};
     const p=phoneMap[phone];
     p.attempts++;
+    if(r._dir==='inbound') p.inbound++;
     if(r._name) p.agents.add(r._name);
     p.lastStatus=r._statusName||r._status;
-    if(r._enrolled) p.enrolled=true;
+    if(enrolledPhones.has(phone)) p.enrolled=true;
   });
   const top5=Object.entries(phoneMap).sort((a,b)=>b[1].attempts-a[1].attempts).slice(0,5);
   document.getElementById('topNumBody').innerHTML=top5.map(([phone,p])=>`
     <tr>
       <td style="font-family:monospace;font-size:13px">${phone}</td>
       <td><span style="font-weight:700;color:${p.attempts>=5?'var(--red)':p.attempts>=3?'var(--amber)':'var(--text)'}">${p.attempts}</span></td>
+      <td>${p.inbound>0?`<span style="font-weight:700;color:var(--red)">⚠ ${p.inbound} inbound</span>`:'<span style="color:var(--gray-400)">—</span>'}</td>
       <td style="color:var(--text-muted)">${[...p.agents].join(', ')||'—'}</td>
       <td style="color:var(--text-muted)">${p.lastStatus||'—'}</td>
       <td>${p.enrolled?'<span style="color:var(--green-dk);font-weight:700">✓ Yes</span>':'<span style="color:var(--gray-400)">No</span>'}</td>
