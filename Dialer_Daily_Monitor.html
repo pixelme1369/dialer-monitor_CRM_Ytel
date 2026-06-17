@@ -258,11 +258,11 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
         <thead>
           <tr>
             <th style="text-align:left">Campaign</th>
-            <th>Type</th>
             <th>Calls</th>
             <th>Dead ≤30s</th>
-            <th>&gt;2 min</th>
-            <th>&gt;10 min</th>
+            <th>&lt;2 min</th>
+            <th>2–10 min</th>
+            <th>&gt;15 min</th>
             <th>&gt;30 min</th>
             <th>Drops</th>
             <th>Avg Talk</th>
@@ -536,6 +536,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   const vdclCalls=calls.filter(r=>r._type==='VDCL');
   const lt2m=calls.filter(r=>r._sec<120).length;
   const b2to10m=calls.filter(r=>r._sec>=120&&r._sec<600).length;
+  const phoneBest={};
+  calls.forEach(r=>{if(r._phone&&r._sec>(phoneBest[r._phone]||0)) phoneBest[r._phone]=r._sec;});
+  const gt15mUnique=Object.values(phoneBest).filter(s=>s>900).length;
+  const gt30mUnique=Object.values(phoneBest).filter(s=>s>1800).length;
   const gt15m=calls.filter(r=>r._sec>900).length;
   const gt30m=calls.filter(r=>r._sec>1800).length;
   const deadCalls=calls.filter(r=>r._sec<=30).length;
@@ -550,17 +554,16 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   const kpiData=[
     {label:'Total Calls',val:total.toLocaleString(),sub:'all dispositions',cls:'blue'},
     {label:'Unique Calls',val:uniquePhones.toLocaleString(),sub:'distinct phone numbers',cls:'blue'},
-    {label:'Marketing Calls',val:mktCalls.length,sub:pct(mktCalls.length,total)+' of total',cls:'blue'},
     {label:'Total Enrolled',val:totalEnrolled,sub:'with Cordoba Enrolled Date',cls:'green'},
-    {label:'Conv Rate (mkt)',val:mktCalls.length?pct(totalEnrolled,mktCalls.length):'—',sub:'enrolled / mkt calls',cls:'green'},
+    {label:'Conv Rate',val:pct(totalEnrolled,uniquePhones),sub:'enrolled / unique calls',cls:'green'},
     {label:'Total Debt Enrolled',val:totalDebt>0?fmt$(totalDebt):'—',sub:'sum of Enrolled Debt',cls:'green'},
     {label:'Dead ≤30s',val:deadCalls.toLocaleString(),sub:pct(deadCalls,total)+' wasted',cls:'red'},
     {label:'DNC Still Dialed',val:dncCount,sub:dncUnique+' unique · '+pct(dncUnique,uniquePhones)+' of unique calls',cls:'red'},
     {label:'Drop / Timeout',val:drops,sub:pct(drops,total)+' drop rate',cls:'amber'},
     {label:'< 2 Min (Lost)',val:lt2m.toLocaleString(),sub:pct(lt2m,total)+' of total',cls:'red'},
     {label:'2 – 10 Min',val:b2to10m.toLocaleString(),sub:pct(b2to10m,total)+' of total',cls:'amber'},
-    {label:'> 15 Min',val:gt15m.toLocaleString(),sub:pct(gt15m,total)+' deep engage',cls:'green'},
-    {label:'> 30 Min',val:gt30m.toLocaleString(),sub:pct(gt30m,total)+' of total',cls:'purple'},
+    {label:'> 15 Min',val:gt15mUnique.toLocaleString(),sub:pct(gt15mUnique,uniquePhones)+' of unique calls',cls:'green'},
+    {label:'> 30 Min',val:gt30mUnique.toLocaleString(),sub:pct(gt30mUnique,uniquePhones)+' of unique calls',cls:'purple'},
     {label:'Total Talk Time',val:fmtDur(totalSec),sub:'all agents',cls:'blue'},
   ];
   document.getElementById('kpiGrid').innerHTML=kpiData.map(k=>`
@@ -693,11 +696,12 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   // ── Campaign table ──
   const campMap={};
   calls.forEach(r=>{
-    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0,drops:0,enroll:0};
+    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,b2to10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
     const d=campMap[c]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
-    if(r._sec>120) d.gt2m++;
-    if(r._sec>600) d.gt10m++;
+    if(r._sec<120) d.lt2m++;
+    if(r._sec>=120&&r._sec<600) d.b2to10m++;
+    if(r._sec>900) d.gt15m++;
     if(r._sec>1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
     if(r._enrolled) d.enroll++;
@@ -709,11 +713,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   document.getElementById('campBody').innerHTML=campRows.map(([camp,d])=>`
     <tr>
       <td>${camp}</td>
-      <td>${typeTag[d.type]||d.type}</td>
       <td>${d.calls}</td>
       <td>${d.short} <span style="color:var(--text-muted);font-size:11px">${pct(d.short,d.calls)}</span></td>
-      <td>${d.gt2m} <span style="color:var(--text-muted);font-size:11px">${pct(d.gt2m,d.calls)}</span></td>
-      <td>${d.gt10m} <span style="color:var(--text-muted);font-size:11px">${pct(d.gt10m,d.calls)}</span></td>
+      <td>${d.lt2m} <span style="color:var(--text-muted);font-size:11px">${pct(d.lt2m,d.calls)}</span></td>
+      <td>${d.b2to10m} <span style="color:var(--text-muted);font-size:11px">${pct(d.b2to10m,d.calls)}</span></td>
+      <td>${d.gt15m} <span style="color:var(--text-muted);font-size:11px">${pct(d.gt15m,d.calls)}</span></td>
       <td>${d.gt30m} <span style="color:var(--text-muted);font-size:11px">${pct(d.gt30m,d.calls)}</span></td>
       <td>${d.drops>0?'<span style="color:var(--red);font-weight:600">'+d.drops+'</span>':'—'}</td>
       <td>${fmtDur(d.calls?Math.round(d.sec/d.calls):0)}</td>
