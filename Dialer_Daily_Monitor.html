@@ -36,8 +36,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .upload-zone{background:var(--surface);border-bottom:1px solid var(--border);padding:20px 28px}
 .upload-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:6px}
 .upload-title span{background:var(--blue-lt);color:var(--blue-dk);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
-.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.upload-card{border:1.5px dashed var(--gray-300);border-radius:var(--radius-lg);padding:16px 18px;cursor:pointer;transition:all .15s;background:var(--gray-50);position:relative}
+.upload-single{max-width:520px}
+.upload-card{border:1.5px dashed var(--gray-300);border-radius:var(--radius-lg);padding:20px 22px;cursor:pointer;transition:all .15s;background:var(--gray-50);position:relative}
 .upload-card:hover,.upload-card.drag{border-color:var(--blue);background:var(--blue-lt)}
 .upload-card.loaded{border-color:var(--green);border-style:solid;background:var(--green-lt)}
 .upload-card input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
@@ -47,6 +47,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .upload-card-status{font-size:12px;font-weight:600;margin-top:6px}
 .upload-card-status.ok{color:var(--green)}
 .upload-card-status.err{color:var(--red)}
+.upload-hint{margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+.upload-hint-icon{background:var(--blue-lt);color:var(--blue-dk);border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
 
 /* ── DATE FILTER ── */
 .filter-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -130,9 +132,6 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 .dispo-count{font-size:12px;font-weight:600;color:var(--text);min-width:36px;text-align:right}
 .dispo-pct{font-size:11px;color:var(--text-muted);min-width:38px;text-align:right}
 
-/* ── CAMPAIGN TABLE ── */
-.camp-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-block}
-
 /* ── EMPTY STATE ── */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;gap:10px;color:var(--text-muted);text-align:center;padding:40px}
 .empty-icon{font-size:40px;opacity:.25;margin-bottom:6px}
@@ -141,7 +140,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
 /* ── RESPONSIVE ── */
 @media(max-width:700px){
-  .upload-grid,.two-col{grid-template-columns:1fr}
+  .two-col{grid-template-columns:1fr}
   .main,.upload-zone,.filter-bar{padding-left:14px;padding-right:14px}
   .hdr-inner{padding:12px 14px}
   .kpi-val{font-size:20px}
@@ -172,21 +171,18 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
 <!-- UPLOAD ZONE -->
 <div class="upload-zone">
-  <div class="upload-title">Upload files <span>Step 1</span></div>
-  <div class="upload-grid">
-    <div class="upload-card" id="ytelCard">
-      <input type="file" accept=".csv,.xlsx,.xls" id="ytelFile" onchange="handleYtel(this)">
-      <div class="upload-card-label">Ytel / VICi Call Log</div>
-      <div class="upload-card-name" id="ytelName">Click or drag to upload</div>
-      <div class="upload-card-sub">CSV or XLSX · any date range · filters by selected date</div>
-      <div class="upload-card-status" id="ytelStatus"></div>
+  <div class="upload-title">Upload merged file <span>Step 1</span></div>
+  <div class="upload-single">
+    <div class="upload-card" id="mergedCard">
+      <input type="file" accept=".csv,.xlsx,.xls" id="mergedFile" onchange="handleMerged(this)">
+      <div class="upload-card-label">Ytel + CRM Merged File</div>
+      <div class="upload-card-name" id="mergedName">Click or drag to upload</div>
+      <div class="upload-card-sub">XLSX or CSV · Ytel call columns + CRM Status / Enrolled Debt / Cordoba Enrolled Date</div>
+      <div class="upload-card-status" id="mergedStatus"></div>
     </div>
-    <div class="upload-card" id="crmCard">
-      <input type="file" accept=".csv,.xlsx,.xls" id="crmFile" onchange="handleCrm(this)">
-      <div class="upload-card-label">CRM Enrollment File</div>
-      <div class="upload-card-name" id="crmName">Click or drag to upload</div>
-      <div class="upload-card-sub">XLSX or CSV · any date range · filters by selected date</div>
-      <div class="upload-card-status" id="crmStatus"></div>
+    <div class="upload-hint">
+      <span class="upload-hint-icon">i</span>
+      Expected columns: <strong>call_date, full_name, campaign_id, length_in_sec, status, CRM Status, Enrolled Debt, Cordoba Enrolled Date</strong>
     </div>
   </div>
 </div>
@@ -197,7 +193,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
   <input type="date" id="targetDate" value="">
   <button class="btn btn-primary" onclick="runAnalysis()">&#9654; Run Analysis</button>
   <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
-  <span class="filter-hint" id="filterHint">Upload both files, pick a date, then click Run Analysis.</span>
+  <span class="filter-hint" id="filterHint">Upload the merged file, pick a date, then click Run Analysis.</span>
 </div>
 
 <!-- MAIN DASHBOARD -->
@@ -296,15 +292,15 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 <!-- EMPTY STATE -->
 <div id="emptyState" class="empty">
   <div class="empty-icon">📋</div>
-  <div class="empty-title">Upload your files to get started</div>
-  <div class="empty-sub">Upload your Ytel call log and CRM enrollment file, pick a date, and click Run Analysis. The dashboard filters both files to that date automatically.</div>
+  <div class="empty-title">Upload your merged file to get started</div>
+  <div class="empty-sub">Upload the Ytel + CRM merged XLSX (one file with both call data and CRM columns), pick a date, and click Run Analysis.</div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-let ytelRaw = null, crmRaw = null, hourChart = null, vdclChart = null;
+let mergedRaw = null, hourChart = null, vdclChart = null;
 
 const CMAP = {'LenderPr':'LenderProcessing','USAbrigh':'USAbright','PLIinbou':'PLIinbound','AGENTDIR':'AGENTDIRECT'};
 const MKT = new Set(['LenderProcessing','USAbright','PLIinbound','BlueSuccess']);
@@ -335,7 +331,13 @@ function showToast(msg,dur=2500){
   setTimeout(()=>t.classList.remove('show'),dur);
 }
 
-// ── File readers ──────────────────────────────────────────────────────────────
+// Parse debt values like "$69,617.00" or "69617"
+function parseDebt(val){
+  if(!val && val!==0) return 0;
+  return parseFloat(String(val).replace(/[$,]/g,''))||0;
+}
+
+// ── File reader ───────────────────────────────────────────────────────────────
 function readFile(file, cb){
   const ext=file.name.split('.').pop().toLowerCase();
   if(ext==='csv'){
@@ -365,45 +367,29 @@ function parseCSV(text){
   });
 }
 
-function handleYtel(input){
+function handleMerged(input){
   const file=input.files[0]; if(!file) return;
-  document.getElementById('ytelName').textContent=file.name;
-  document.getElementById('ytelStatus').textContent='Reading...';
+  document.getElementById('mergedName').textContent=file.name;
+  document.getElementById('mergedStatus').textContent='Reading...';
   readFile(file, data=>{
-    ytelRaw=data;
+    mergedRaw=data;
     const n=data.length;
-    document.getElementById('ytelCard').classList.add('loaded');
-    document.getElementById('ytelStatus').className='upload-card-status ok';
-    document.getElementById('ytelStatus').textContent='✓ '+n.toLocaleString()+' rows loaded';
-    showToast('Ytel file loaded — '+n.toLocaleString()+' rows');
-    autoSetDate(data, 'call_date');
+    document.getElementById('mergedCard').classList.add('loaded');
+    document.getElementById('mergedStatus').className='upload-card-status ok';
+    document.getElementById('mergedStatus').textContent='✓ '+n.toLocaleString()+' rows loaded';
+    showToast('File loaded — '+n.toLocaleString()+' rows');
+    autoSetDate(data);
   });
 }
 
-function handleCrm(input){
-  const file=input.files[0]; if(!file) return;
-  document.getElementById('crmName').textContent=file.name;
-  document.getElementById('crmStatus').textContent='Reading...';
-  readFile(file, data=>{
-    crmRaw=data;
-    const n=data.length;
-    document.getElementById('crmCard').classList.add('loaded');
-    document.getElementById('crmStatus').className='upload-card-status ok';
-    document.getElementById('crmStatus').textContent='✓ '+n.toLocaleString()+' rows loaded';
-    showToast('CRM file loaded — '+n.toLocaleString()+' rows');
-    if(!document.getElementById('targetDate').value) autoSetDate(data, 'Created');
-  });
-}
-
-function autoSetDate(data, field){
-  // Try to find the most recent date in the file
+function autoSetDate(data){
   const dates=new Set();
   data.slice(0,200).forEach(r=>{
-    const v=r[field]||'';
-    const m=(typeof v==='string'?v:String(v)).match(/(\d{4}-\d{2}-\d{2})/);
+    const v=r['call_date']||r['Call Date']||r['date']||'';
+    const s=typeof v==='string'?v:String(v);
+    const m=s.match(/(\d{4}-\d{2}-\d{2})/);
     if(m) dates.add(m[1]);
-    // Excel date object
-    if(v instanceof Date){ const d=v; dates.add(d.toISOString().slice(0,10)); }
+    if(v instanceof Date) dates.add(v.toISOString().slice(0,10));
   });
   const sorted=[...dates].sort();
   if(sorted.length && !document.getElementById('targetDate').value){
@@ -418,10 +404,8 @@ function getDateStr(val){
   const s=String(val);
   const m=s.match(/(\d{4}-\d{2}-\d{2})/);
   if(m) return m[1];
-  // MM/DD/YYYY
   const m2=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if(m2) return m2[3]+'-'+m2[1].padStart(2,'0')+'-'+m2[2].padStart(2,'0');
-  // Excel serial
   if(!isNaN(+s) && +s>40000){
     const d=new Date(Math.round((+s-25569)*86400*1000));
     return d.toISOString().slice(0,10);
@@ -429,48 +413,47 @@ function getDateStr(val){
   return '';
 }
 
-// ── Main analysis ─────────────────────────────────────────────────────────────
+// ── Clear ─────────────────────────────────────────────────────────────────────
 function clearAll(){
-  ytelRaw=null; crmRaw=null;
-  ['ytelFile','crmFile'].forEach(id=>{ document.getElementById(id).value=''; });
-  ['ytelCard','crmCard'].forEach(id=>{ document.getElementById(id).classList.remove('loaded'); });
-  ['ytelName','crmName'].forEach(id=>{ document.getElementById(id).textContent='Click or drag to upload'; });
-  ['ytelStatus','crmStatus'].forEach(id=>{ document.getElementById(id).textContent=''; });
+  mergedRaw=null;
+  document.getElementById('mergedFile').value='';
+  document.getElementById('mergedCard').classList.remove('loaded');
+  document.getElementById('mergedName').textContent='Click or drag to upload';
+  document.getElementById('mergedStatus').textContent='';
   document.getElementById('dashboard').style.display='none';
   document.getElementById('emptyState').style.display='flex';
   if(hourChart){ hourChart.destroy(); hourChart=null; }
   if(vdclChart){ vdclChart.destroy(); vdclChart=null; }
 }
 
+// ── Run analysis ──────────────────────────────────────────────────────────────
 function runAnalysis(){
-  if(!ytelRaw){ showToast('Upload the Ytel file first'); return; }
-  if(!crmRaw){ showToast('Upload the CRM enrollment file first'); return; }
+  if(!mergedRaw){ showToast('Upload the merged file first'); return; }
   const dateStr=document.getElementById('targetDate').value;
   if(!dateStr){ showToast('Pick a date to analyze'); return; }
 
-  // Filter Ytel
-  const calls=ytelRaw.filter(r=>{
+  const calls=mergedRaw.filter(r=>{
     const d=getDateStr(r['call_date']||r['Call Date']||r['date']||r['Date']||'');
     return d===dateStr;
   });
 
-  // Filter CRM — try Created or Cordoba Enrolled Date
-  const enrolled=crmRaw.filter(r=>{
-    const d=getDateStr(r['Created']||r['Enrolled Date']||r['Cordoba Enrolled Date']||r['date']||r['Date']||r['enrollment_date']||'');
-    return d===dateStr;
-  });
+  if(calls.length===0){ showToast('No calls found for '+dateStr+' — check the date'); return; }
 
-  if(calls.length===0){ showToast('No Ytel calls found for '+dateStr+' — check the date'); return; }
+  // Enrolled = rows with a Cordoba Enrolled Date on the selected date
+  const enrolledRows=calls.filter(r=>{
+    const v=r['Cordoba Enrolled Date']||r['Enrolled Date']||'';
+    return v && v!=='';
+  });
 
   document.getElementById('hdrDate').textContent=dateStr;
   document.getElementById('filterHint').textContent=
-    calls.length.toLocaleString()+' calls · '+enrolled.length+' enrollments on '+dateStr;
+    calls.length.toLocaleString()+' calls · '+enrolledRows.length+' enrollments on '+dateStr;
 
-  buildDashboard(calls, enrolled, dateStr);
+  buildDashboard(calls, enrolledRows, dateStr);
 }
 
-function buildDashboard(calls, enrolled, dateStr){
-  // Normalize
+function buildDashboard(calls, enrolledRows, dateStr){
+  // Normalize call fields
   calls.forEach(r=>{
     r._sec=parseInt(r['length_in_sec']||r['duration']||r['Duration']||r['talk_sec']||0,10)||0;
     r._campaign=normCamp((r['campaign_id']||r['Campaign']||'').trim());
@@ -480,46 +463,46 @@ function buildDashboard(calls, enrolled, dateStr){
     r._dir=(r['direction']||r['Direction']||'').toLowerCase();
     r._status=(r['status']||r['Status']||'').trim();
     r._statusName=(r['status_name']||r['Status Name']||r['dispo']||r._status).trim();
-    r._hour=(r['call_date']||r['date']||'').slice(11,13)||'00';
+    r._hour=(String(r['call_date']||r['date']||'')).slice(11,13)||'00';
     r._ug=(r['user_group']||'').trim();
+    r._enrolled=!!(r['Cordoba Enrolled Date']||r['Enrolled Date']||'');
+    r._debt=parseDebt(r['Enrolled Debt']||0);
+    r._crmStatus=(r['CRM Status']||'').trim();
   });
 
-  // CRM map: name → {count, debt}
+  // Build agent enrollment map directly from call rows
   const enrollMap={};
-  enrolled.forEach(r=>{
-    const name=(r['Assigned To']||r['assigned_to']||r['agent']||r['Agent']||'').trim().toLowerCase();
-    const debt=parseFloat(r['Enrolled Debt']||r['enrolled_debt']||r['debt']||0)||0;
-    if(!name) return;
+  enrolledRows.forEach(r=>{
+    const name=r._name.toLowerCase();
     if(!enrollMap[name]) enrollMap[name]={count:0,debt:0};
     enrollMap[name].count++;
-    enrollMap[name].debt+=debt;
+    enrollMap[name].debt+=r._debt;
   });
 
   const total=calls.length;
   const totalSec=calls.reduce((a,r)=>a+r._sec,0);
   const mktCalls=calls.filter(r=>r._type==='Marketing');
-  const manCalls=calls.filter(r=>r._type==='Manual');
   const vdclCalls=calls.filter(r=>r._type==='VDCL');
-  const gt30=calls.filter(r=>r._sec>30).length;
   const gt2m=calls.filter(r=>r._sec>120).length;
   const gt10m=calls.filter(r=>r._sec>600).length;
   const gt30m=calls.filter(r=>r._sec>1800).length;
   const deadCalls=calls.filter(r=>r._sec<=30).length;
-  const totalEnrolled=enrolled.length;
+  const totalEnrolled=enrolledRows.length;
+  const totalDebt=enrolledRows.reduce((a,r)=>a+r._debt,0);
   const drops=calls.filter(r=>['DROP','TIMEOT'].includes(r._status)).length;
   const dncCount=calls.filter(r=>r._status==='DNC').length;
 
   // ── KPIs ──
   const kpiData=[
-    {label:'Total Calls',val:total.toLocaleString(),sub:'↓ inb · ↑ out',cls:'blue'},
+    {label:'Total Calls',val:total.toLocaleString(),sub:'all dispositions',cls:'blue'},
     {label:'Marketing Calls',val:mktCalls.length,sub:pct(mktCalls.length,total)+' of total',cls:'blue'},
-    {label:'Total Enrolled',val:totalEnrolled,sub:'from CRM on '+dateStr,cls:'green'},
+    {label:'Total Enrolled',val:totalEnrolled,sub:'with Cordoba Enrolled Date',cls:'green'},
     {label:'Conv Rate (mkt)',val:mktCalls.length?pct(totalEnrolled,mktCalls.length):'—',sub:'enrolled / mkt calls',cls:'green'},
+    {label:'Total Debt Enrolled',val:totalDebt>0?fmt$(totalDebt):'—',sub:'sum of Enrolled Debt',cls:'green'},
     {label:'Dead ≤30s',val:deadCalls.toLocaleString(),sub:pct(deadCalls,total)+' wasted',cls:'red'},
     {label:'DNC Still Dialed',val:dncCount,sub:pct(dncCount,total)+' compliance risk',cls:'red'},
     {label:'Drop / Timeout',val:drops,sub:pct(drops,total)+' drop rate',cls:'amber'},
     {label:'> 10 Min Calls',val:gt10m,sub:pct(gt10m,total)+' deep engage',cls:'amber'},
-    {label:'> 30 Min Calls',val:gt30m,sub:pct(gt30m,total)+' of total',cls:'purple'},
     {label:'Total Talk Time',val:fmtDur(totalSec),sub:'all agents',cls:'blue'},
   ];
   document.getElementById('kpiGrid').innerHTML=kpiData.map(k=>`
@@ -538,24 +521,19 @@ function buildDashboard(calls, enrolled, dateStr){
   if(vdclAfterHours>10) issues.push({sev:'crit',title:'Dialer running after hours — '+vdclAfterHours+' VDCL drops after 6pm',detail:'Agents are off but the dialer keeps firing inbound leads. Callers hit dead air, leads are burned. Fix: set campaign end-time in Ytel and add an after-hours IVR.'});
   if(dncCount>20) issues.push({sev:'crit',title:''+dncCount+' DNC numbers still being dialed ('+pct(dncCount,total)+')',detail:'Compliance risk. These numbers have been flagged Do Not Call but are still in active rotation. Fix: run a DNC scrub now and enable auto-suppression in Ytel.'});
 
-  // PLR campaign check
   const plrDrops=vdclCalls.filter(r=>r._campaign==='PLR').length;
   if(plrDrops>30) issues.push({sev:'crit',title:'PLR campaign producing '+plrDrops+' VDCL drops — campaign likely broken',detail:'Agent availability config on PLR is wrong. The campaign is generating more drops than conversations. Fix: pause PLR, audit agent assignment and queue overflow rules, then re-enable.'});
 
   if(shortPct>30) issues.push({sev:'high',title:deadCalls.toLocaleString()+' calls ≤30s ('+shortPct.toFixed(1)+'% dead weight)',detail:'Over 30% of calls ended before any real conversation. This is list quality degradation and/or agents hanging up early. Pull recordings for top-volume agents with highest short rates.'});
   if(dropPct>5) issues.push({sev:'high',title:'Drop/timeout rate at '+pct(drops,total)+' ('+drops+' calls)',detail:'Higher than the 5% acceptable threshold. Check queue depth, agent availability settings, and shift scheduling against call volume.'});
 
-  // Agent-specific issues
-  const agentMap={};
+  // Agent-specific coaching issues
+  const agentMapIssue={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
-    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0};
-    const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
-    if(r._sec<=30) d.short++;
-    if(r._sec>120) d.gt2m++;
-    if(r._sec>600) d.gt10m++;
-    if(r._sec>1800) d.gt30m++;
+    if(!agentMapIssue[r._name]) agentMapIssue[r._name]={calls:0,short:0};
+    agentMapIssue[r._name].calls++; if(r._sec<=30) agentMapIssue[r._name].short++;
   });
-  const badAgents=Object.entries(agentMap)
+  const badAgents=Object.entries(agentMapIssue)
     .filter(([n,d])=>d.calls>=30&&d.short/d.calls>0.55)
     .sort((a,b)=>b[1].calls-a[1].calls).slice(0,3);
   if(badAgents.length){
@@ -563,7 +541,6 @@ function buildDashboard(calls, enrolled, dateStr){
     issues.push({sev:'high',title:'High short-call rate agents need coaching',detail:names+'. Pull recordings this week — either leads are wrong quality or agent is hanging up early.'});
   }
 
-  // Marketing conversion
   const mktConv=mktCalls.length?totalEnrolled/mktCalls.length*100:0;
   if(mktConv<5 && mktCalls.length>50) issues.push({sev:'high',title:'Marketing conversion below 5% ('+mktConv.toFixed(1)+'%)',detail:'Only '+totalEnrolled+' enrollments from '+mktCalls.length+' marketing calls. Route marketing queues to proven closers only and audit PLIinbound routing.'});
 
@@ -612,12 +589,19 @@ function buildDashboard(calls, enrolled, dateStr){
     </div>`).join('');
 
   // ── Agent table ──
-  const agentEnroll={};
-  Object.entries(enrollMap).forEach(([k,v])=>{ agentEnroll[k]=v; });
+  const agentMap={};
+  calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
+    if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0};
+    const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
+    if(r._sec<=30) d.short++;
+    if(r._sec>120) d.gt2m++;
+    if(r._sec>600) d.gt10m++;
+    if(r._sec>1800) d.gt30m++;
+  });
 
   const agentRows=Object.entries(agentMap)
     .map(([name,d])=>{
-      const enr=agentEnroll[name.toLowerCase()]||{count:0,debt:0};
+      const enr=enrollMap[name.toLowerCase()]||{count:0,debt:0};
       return {...d,name,enr:enr.count,debt:enr.debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
@@ -644,20 +628,14 @@ function buildDashboard(calls, enrolled, dateStr){
   // ── Campaign table ──
   const campMap={};
   calls.forEach(r=>{
-    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0,drops:0};
+    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,gt2m:0,gt10m:0,gt30m:0,drops:0,enroll:0};
     const d=campMap[c]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
     if(r._sec>120) d.gt2m++;
     if(r._sec>600) d.gt10m++;
     if(r._sec>1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
-  });
-
-  // Enroll by campaign
-  const campEnroll={};
-  enrolled.forEach(r=>{
-    const c=normCamp((r['Campaign']||r['campaign']||r['campaign_id']||'').trim());
-    if(!campEnroll[c]) campEnroll[c]=0; campEnroll[c]++;
+    if(r._enrolled) d.enroll++;
   });
 
   const typeOrder={Marketing:0,Manual:1,Other:2,VDCL:3};
@@ -674,7 +652,7 @@ function buildDashboard(calls, enrolled, dateStr){
       <td>${d.gt30m} <span style="color:var(--text-muted);font-size:11px">${pct(d.gt30m,d.calls)}</span></td>
       <td>${d.drops>0?'<span style="color:var(--red);font-weight:600">'+d.drops+'</span>':'—'}</td>
       <td>${fmtDur(d.calls?Math.round(d.sec/d.calls):0)}</td>
-      <td class="${(campEnroll[camp]||0)>0?'enroll-num':'enroll-zero'}">${campEnroll[camp]||'—'}</td>
+      <td class="${d.enroll>0?'enroll-num':'enroll-zero'}">${d.enroll||'—'}</td>
     </tr>`).join('');
 
   // ── VDCL section ──
@@ -711,17 +689,15 @@ function buildDashboard(calls, enrolled, dateStr){
 }
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
-['ytelCard','crmCard'].forEach(id=>{
-  const el=document.getElementById(id);
-  el.addEventListener('dragover',e=>{ e.preventDefault(); el.classList.add('drag'); });
-  el.addEventListener('dragleave',()=>el.classList.remove('drag'));
-  el.addEventListener('drop',e=>{
-    e.preventDefault(); el.classList.remove('drag');
-    const f=e.dataTransfer.files[0]; if(!f) return;
-    const input=el.querySelector('input');
-    const dt=new DataTransfer(); dt.items.add(f); input.files=dt.files;
-    input.dispatchEvent(new Event('change'));
-  });
+const el=document.getElementById('mergedCard');
+el.addEventListener('dragover',e=>{ e.preventDefault(); el.classList.add('drag'); });
+el.addEventListener('dragleave',()=>el.classList.remove('drag'));
+el.addEventListener('drop',e=>{
+  e.preventDefault(); el.classList.remove('drag');
+  const f=e.dataTransfer.files[0]; if(!f) return;
+  const input=el.querySelector('input');
+  const dt=new DataTransfer(); dt.items.add(f); input.files=dt.files;
+  input.dispatchEvent(new Event('change'));
 });
 
 // Set today as default date
