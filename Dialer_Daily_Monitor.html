@@ -589,7 +589,17 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   if(plrDrops>30) issues.push({sev:'crit',title:'PLR campaign producing '+plrDrops+' VDCL drops — campaign likely broken',detail:'Agent availability config on PLR is wrong. The campaign is generating more drops than conversations. Fix: pause PLR, audit agent assignment and queue overflow rules, then re-enable.'});
 
   if(shortPct>30) issues.push({sev:'high',title:deadCalls.toLocaleString()+' calls ≤30s ('+shortPct.toFixed(1)+'% dead weight)',detail:'Over 30% of calls ended before any real conversation. This is list quality degradation and/or agents hanging up early. Pull recordings for top-volume agents with highest short rates.'});
-  if(dropPct>5) issues.push({sev:'high',title:'Drop/timeout rate at '+pct(drops,total)+' ('+drops+' calls)',detail:'Higher than the 5% acceptable threshold. Check queue depth, agent availability settings, and shift scheduling against call volume.'});
+  if(dropPct>5){
+    const agentDrops={},agentTimeouts={};
+    calls.forEach(r=>{
+      const n=r._name||'Unknown';
+      if(r._status==='DROP'){agentDrops[n]=(agentDrops[n]||0)+1;}
+      if(r._status==='TIMEOT'){agentTimeouts[n]=(agentTimeouts[n]||0)+1;}
+    });
+    const topDrops=Object.entries(agentDrops).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' ('+c+')').join(', ')||'—';
+    const topTimeouts=Object.entries(agentTimeouts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' ('+c+')').join(', ')||'—';
+    issues.push({sev:'high',title:'Drop/timeout rate at '+pct(drops,total)+' ('+drops+' calls)',detail:'Higher than the 5% acceptable threshold. Check queue depth, agent availability settings, and shift scheduling against call volume.\n\nMost Drops: '+topDrops+'\nMost Timeouts: '+topTimeouts});
+  }
 
   // Agent-specific coaching issues
   const agentMapIssue={};
@@ -615,7 +625,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       <div class="issue-bar ${iss.sev}"></div>
       <div>
         <div class="issue-title">${iss.title}</div>
-        <div class="issue-detail">${iss.detail}</div>
+        <div class="issue-detail">${iss.detail.replace(/\n/g,'<br>')}</div>
       </div>
       <div class="issue-badge ${iss.sev}">${iss.sev==='crit'?'Critical':iss.sev==='high'?'High':'Good'}</div>
     </div>`).join('');
