@@ -241,16 +241,18 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
             <th style="text-align:left;min-width:160px" data-col="0">Agent</th>
             <th data-col="1">Calls</th>
             <th data-col="2">Unique #s</th>
-            <th data-col="3">Short% ≤30s</th>
-            <th data-col="4">&lt;2 min</th>
-            <th data-col="5">2–10 min</th>
-            <th data-col="6">&gt;15 min</th>
-            <th data-col="7">&gt;30 min</th>
-            <th data-col="8">Avg Talk</th>
-            <th data-col="9">Total Talk</th>
-            <th data-col="10">Enrolled</th>
-            <th data-col="11">Debt $</th>
-            <th data-col="12">Conv% (enr/>15m)</th>
+            <th data-col="3">Inbound</th>
+            <th data-col="4">Outbound</th>
+            <th data-col="5">Short% ≤30s</th>
+            <th data-col="6">&lt;2 min</th>
+            <th data-col="7">2–10 min</th>
+            <th data-col="8">&gt;15 min</th>
+            <th data-col="9">&gt;30 min</th>
+            <th data-col="10">Avg Talk</th>
+            <th data-col="11">Total Talk</th>
+            <th data-col="12">Enrolled</th>
+            <th data-col="13">Debt $</th>
+            <th data-col="14">Conv% (enr/>15m)</th>
           </tr>
         </thead>
         <tbody id="agentBody"></tbody>
@@ -715,6 +717,15 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     </div>`).join('');
 
   // ── Agent table ──
+  // Build per-agent first-direction map: agent+phone → {dir, ts}
+  const agentPhoneFirstDir={};
+  calls.filter(r=>!['VDCL','VDAD'].includes(r._user)&&r._phone).forEach(r=>{
+    const key=r._name+'||'+r._phone;
+    const ts=parseTs(r['call_date']||r['date']||'');
+    if(!agentPhoneFirstDir[key]||ts<agentPhoneFirstDir[key].ts)
+      agentPhoneFirstDir[key]={dir:r._dir,ts};
+  });
+
   const agentMap={};
   const agentHourMap={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
@@ -748,7 +759,13 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       const credit=agentEnrollCredit[name.toLowerCase()]||{count:0,debt:0};
       const enr=credit.count;
       const debt=credit.debt;
-      return {...d,name,uniqueCalls,enr,debt,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
+      let inboundUniq=0,outboundUniq=0;
+      d.phones.forEach(phone=>{
+        const fd=agentPhoneFirstDir[name+'||'+phone];
+        if(fd&&fd.dir==='inbound') inboundUniq++;
+        else outboundUniq++;
+      });
+      return {...d,name,uniqueCalls,enr,debt,inboundUniq,outboundUniq,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
@@ -765,6 +782,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       return `<tr class="agent-hour-row" style="display:none" data-parent="${rowId}">
         <td style="text-align:left;padding-left:32px;color:var(--text-muted);font-size:11px">↳ ${hk}</td>
         <td>${h.calls}</td>
+        <td>—</td>
+        <td>—</td>
         <td>—</td>
         <td>${hShortPct}%</td>
         <td>${h.lt2m}</td>
@@ -783,6 +802,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       <td style="text-align:left"><span class="agent-toggle" id="tog-${rowId}">▶</span> ${a.name} ${openerTag}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxCalls*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
       <td>${a.uniqueCalls}</td>
+      <td style="color:var(--blue)">${a.inboundUniq}</td>
+      <td style="color:var(--text-muted)">${a.outboundUniq}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg ${shortCls}" style="width:${a.shortPct.toFixed(0)}%"></div></div>${a.shortPct.toFixed(0)}%</div></td>
       <td>${a.lt2m}</td>
       <td>${a.b2to10m}</td>
@@ -808,6 +829,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     <td style="text-align:left">TOTAL</td>
     <td>${agTot.calls}</td>
     <td>${agTot.uniqueCalls}</td>
+    <td>—</td>
+    <td>—</td>
     <td>${agTotShortPct.toFixed(0)}%</td>
     <td>${agTot.lt2m}</td>
     <td>${agTot.b2to10m}</td>
