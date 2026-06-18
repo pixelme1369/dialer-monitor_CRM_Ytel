@@ -639,7 +639,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     {label:'Dead ≤30s',val:deadCalls.toLocaleString(),sub:pct(deadCalls,total)+' wasted',cls:'red'},
     {label:'DNC Still Dialed',val:dncCount,sub:dncUnique+' unique · '+pct(dncUnique,uniquePhones)+' of unique calls',cls:'red'},
     {label:'Drop / Timeout',val:drops,sub:pct(drops,total)+' drop rate',cls:'amber'},
-    {label:'< 2 Min (Lost)',val:lt2m.toLocaleString(),sub:pct(lt2m,total)+' of total',cls:'red'},
+
     {label:'2 – 10 Min',val:b2to10m.toLocaleString(),sub:pct(b2to10m,total)+' of total',cls:'amber'},
     {label:'> 15 Min',val:gt15mUnique.toLocaleString(),sub:pct(gt15mUnique,uniquePhones)+' of unique calls',cls:'green'},
     {label:'> 30 Min',val:gt30mUnique.toLocaleString(),sub:pct(gt30mUnique,uniquePhones)+' of unique calls',cls:'purple'},
