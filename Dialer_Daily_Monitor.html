@@ -237,12 +237,12 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     <div id="dispoLt2List" style="max-height:220px;overflow-y:auto"></div>
   </div>
 
-  <!-- AGENT TABLE -->
+  <!-- CLOSER TABLE -->
   <div class="card">
-    <div class="card-title">Agent performance <span class="card-title-sub" id="agentCount"></span></div>
+    <div class="card-title">Closer performance <span class="card-title-sub" id="closerCount"></span></div>
     <div class="tbl-wrap">
-      <table id="agentTable">
-        <thead id="agentHead">
+      <table id="closerTable">
+        <thead id="closerHead">
           <tr>
             <th style="text-align:left;min-width:160px" data-col="0">Agent</th>
             <th data-col="1">Calls</th>
@@ -263,7 +263,38 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
             <th data-col="16">Conv% (enr/>5m)</th>
           </tr>
         </thead>
-        <tbody id="agentBody"></tbody>
+        <tbody id="closerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- OPENER TABLE -->
+  <div class="card">
+    <div class="card-title">Opener performance <span class="card-title-sub" id="openerCount"></span></div>
+    <div class="tbl-wrap">
+      <table id="openerTable">
+        <thead id="openerHead">
+          <tr>
+            <th style="text-align:left;min-width:160px" data-col="0">Agent</th>
+            <th data-col="1">Calls</th>
+            <th data-col="2">Unique #s</th>
+            <th data-col="3">Inbound</th>
+            <th data-col="4">Outbound</th>
+            <th data-col="5">Short% ≤30s</th>
+            <th data-col="6">&lt;2 min</th>
+            <th data-col="7">&gt;2 min</th>
+            <th data-col="8">&gt;5 min</th>
+            <th data-col="9">&gt;10 min</th>
+            <th data-col="10">&gt;15 min</th>
+            <th data-col="11">&gt;30 min</th>
+            <th data-col="12">Avg Talk</th>
+            <th data-col="13">Total Talk</th>
+            <th data-col="14">Enrolled</th>
+            <th data-col="15">Debt $</th>
+            <th data-col="16">Conv% (enr/>5m)</th>
+          </tr>
+        </thead>
+        <tbody id="openerBody"></tbody>
       </table>
     </div>
   </div>
@@ -839,9 +870,14 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       return {...d,name,uniqueCalls,enr,debt,inboundUniq,outboundUniq,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
-  const maxCalls=agentRows[0]?agentRows[0].calls:1;
-  document.getElementById('agentCount').textContent=agentRows.length+' agents';
-  document.getElementById('agentBody').innerHTML=agentRows.map((a,i)=>{
+  const closerRows=agentRows.filter(a=>!OPENERS.has(a.name.toLowerCase()));
+  const openerRows=agentRows.filter(a=>OPENERS.has(a.name.toLowerCase()));
+  document.getElementById('closerCount').textContent=closerRows.length+' agents';
+  document.getElementById('openerCount').textContent=openerRows.length+' agents';
+
+  function renderAgentRows(rows,bodyId,prefix){
+  const maxC=rows[0]?rows[0].calls:1;
+  document.getElementById(bodyId).innerHTML=rows.map((a,i)=>{
     const convPct=a.gt5m>0&&a.enr>0?pct(a.enr,a.gt5m):'—';
     const shortCls=a.shortPct>55?'bad':'';
     const rowId='agent-hr-'+i;
@@ -873,7 +909,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     const openerTag=OPENERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':'';
     return `<tr class="agent-main-row" id="${rowId}" style="cursor:pointer" onclick="toggleAgentHours('${rowId}')">
       <td style="text-align:left"><span class="agent-toggle" id="tog-${rowId}">▶</span> ${a.name} ${openerTag}</td>
-      <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxCalls*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
+      <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxC*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
       <td>${a.uniqueCalls}</td>
       <td style="color:var(--blue)">${a.inboundUniq}</td>
       <td style="color:var(--text-muted)">${a.outboundUniq}</td>
@@ -891,34 +927,33 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       <td>${convPct}</td>
     </tr>${hourRows}`;
   }).join('');
-
-  // Agent table totals row
-  const agTot=agentRows.reduce((t,a)=>({
+  // totals row
+  const tot=rows.reduce((t,a)=>({
     calls:t.calls+a.calls, uniqueCalls:t.uniqueCalls+a.uniqueCalls,
     short:t.short+a.short, lt2m:t.lt2m+a.lt2m, gt2m:t.gt2m+a.gt2m, gt5m:t.gt5m+a.gt5m,
     gt10m:t.gt10m+a.gt10m, gt15m:t.gt15m+a.gt15m, gt30m:t.gt30m+a.gt30m,
     sec:t.sec+a.sec, enr:t.enr+a.enr, debt:t.debt+a.debt
   }),{calls:0,uniqueCalls:0,short:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,sec:0,enr:0,debt:0});
-  const agTotShortPct=agTot.calls?agTot.short/agTot.calls*100:0;
-  document.getElementById('agentBody').innerHTML+=`<tr style="font-weight:700;background:var(--gray-100);border-top:2px solid var(--border)">
+  const totShortPct=tot.calls?tot.short/tot.calls*100:0;
+  document.getElementById(bodyId).innerHTML+=`<tr style="font-weight:700;background:var(--gray-100);border-top:2px solid var(--border)">
     <td style="text-align:left">TOTAL</td>
-    <td>${agTot.calls}</td>
-    <td>${agTot.uniqueCalls}</td>
-    <td>—</td>
-    <td>—</td>
-    <td>${agTotShortPct.toFixed(0)}%</td>
-    <td>${funnelCell(agTot.lt2m,agTot.calls,"var(--red)")}</td>
-    <td>${funnelCell(agTot.gt2m,0,null)}</td>
-    <td>${funnelCell(agTot.gt5m,0,null)}</td>
-    <td>${funnelCell(agTot.gt10m,0,null)}</td>
-    <td>${funnelCell(agTot.gt15m,agTot.calls,"var(--green-dk)")}</td>
-    <td>${funnelCell(agTot.gt30m,agTot.calls,"var(--green-dk)")}</td>
-    <td>—</td>
-    <td>${fmtDur(agTot.sec)}</td>
-    <td>${agTot.enr||'—'}</td>
-    <td>${agTot.debt>0?fmt$(agTot.debt):'—'}</td>
+    <td>${tot.calls}</td><td>${tot.uniqueCalls}</td><td>—</td><td>—</td>
+    <td>${totShortPct.toFixed(0)}%</td>
+    <td>${funnelCell(tot.lt2m,tot.calls,"var(--red)")}</td>
+    <td>${funnelCell(tot.gt2m,0,null)}</td>
+    <td>${funnelCell(tot.gt5m,0,null)}</td>
+    <td>${funnelCell(tot.gt10m,0,null)}</td>
+    <td>${funnelCell(tot.gt15m,tot.calls,"var(--green-dk)")}</td>
+    <td>${funnelCell(tot.gt30m,tot.calls,"var(--green-dk)")}</td>
+    <td>—</td><td>${fmtDur(tot.sec)}</td>
+    <td>${tot.enr||'—'}</td>
+    <td>${tot.debt>0?fmt$(tot.debt):'—'}</td>
     <td>—</td>
   </tr>`;
+  }
+
+  renderAgentRows(closerRows,'closerBody','cl');
+  renderAgentRows(openerRows,'openerBody','op');
 
   // ── Agent funnel ratio table ──
   const fcell=(n,d,color)=>{
@@ -960,9 +995,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   })();
 
   // ── Agent table column sorting ──
-  (function(){
-    const thead=document.getElementById('agentHead');
-    const tbody=document.getElementById('agentBody');
+  function wireAgentSort(headId,bodyId){
+    const thead=document.getElementById(headId);
+    const tbody=document.getElementById(bodyId);
+    if(!thead||!tbody) return;
     let sortCol=-1,sortDir=1;
     function cellVal(td){
       const n=parseFloat(td.textContent.replace(/[^0-9.\-]/g,''));
@@ -974,9 +1010,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=-1;}
         thead.querySelectorAll('th').forEach(h=>h.classList.remove('sort-asc','sort-desc'));
         th.classList.add(sortDir===1?'sort-asc':'sort-desc');
-        // only sort main rows; keep total row at bottom; keep hour sub-rows with their parent
         const allRows=[...tbody.querySelectorAll('tr')];
-        const totRow=allRows.find(r=>r.style.fontWeight==='700'||r.querySelector('td')?.textContent==='TOTAL');
+        const totRow=allRows.find(r=>r.querySelector('td')?.textContent==='TOTAL');
         const mainRows=allRows.filter(r=>r.classList.contains('agent-main-row'));
         mainRows.sort((a,b)=>{
           const av=cellVal(a.cells[col]),bv=cellVal(b.cells[col]);
@@ -990,7 +1025,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         if(totRow) tbody.appendChild(totRow);
       });
     });
-  })();
+  }
+  wireAgentSort('closerHead','closerBody');
+  wireAgentSort('openerHead','openerBody');
 
   // ── Campaign table ──
   const campMap={};
