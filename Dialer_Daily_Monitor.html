@@ -702,8 +702,16 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       if(r._sec>=120&&r._sec<600) h.b2to10m++;
       if(r._sec>900) h.gt15m++;
       if(r._sec>1800) h.gt30m++;
-      if(r._enrolled) h.enr++;
     }
+  });
+
+  // Credit enrollments to the exact hour of the winning call per phone
+  Object.entries(enrolledPhoneAgent).forEach(([phone,{agent,ts}])=>{
+    const r=calls.find(c=>c._phone===phone&&c._name===agent&&parseTs(c['call_date']||c['date']||'')===ts);
+    if(!r) return;
+    const hr=parseInt(r._hour); if(isNaN(hr)) return;
+    const hk=String(hr).padStart(2,'0')+':00';
+    if(agentHourMap[agent]&&agentHourMap[agent][hk]) agentHourMap[agent][hk].enr++;
   });
 
   const agentRows=Object.entries(agentMap)
