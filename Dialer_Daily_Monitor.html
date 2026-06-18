@@ -373,6 +373,7 @@ function toggleAgentHours(rowId){
   rows.forEach(r=>r.style.display=hidden?'':'none');
   if(tog) tog.textContent=hidden?'▼':'▶';
 }
+function toggleEl(id){const el=document.getElementById(id);if(el)el.style.display=el.style.display==='none'?'':'none';}
 function toggleCampAgents(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
   const tog=document.getElementById('tog-'+rowId);
@@ -974,8 +975,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
   });
 
   // ── Drops & Timeouts by hour chart ──
-  const dropHour={}, timeoutHour={}, dropHourCamps={};
-  for(let i=0;i<24;i++){ const h=String(i).padStart(2,'0'); dropHour[h]=0; timeoutHour[h]=0; dropHourCamps[h]={}; }
+  const dropHour={}, timeoutHour={}, dropHourCamps={}, dropHourPhones={};
+  for(let i=0;i<24;i++){ const h=String(i).padStart(2,'0'); dropHour[h]=0; timeoutHour[h]=0; dropHourCamps[h]={}; dropHourPhones[h]={}; }
   calls.forEach(r=>{
     const h=r._hour; if(h===undefined||h===null) return;
     const hk=String(parseInt(h)).padStart(2,'0');
@@ -984,6 +985,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     if(['DROP','TIMEOT'].includes(r._status)){
       if(!dropHourCamps[hk]) dropHourCamps[hk]={};
       dropHourCamps[hk][r._campaign]=(dropHourCamps[hk][r._campaign]||0)+1;
+      if(r._phone){
+        if(!dropHourPhones[hk]) dropHourPhones[hk]={};
+        if(!dropHourPhones[hk][r._campaign]) dropHourPhones[hk][r._campaign]=[];
+        dropHourPhones[hk][r._campaign].push(r._phone);
+      }
     }
   });
   const dctx=document.getElementById('dropHourChart').getContext('2d');
@@ -1009,7 +1015,17 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
         if(!sorted.length){ detail.style.display='none'; return; }
         title.textContent=hk+':00 — '+(dropHour[hk]+timeoutHour[hk])+' drops/timeouts by campaign:';
         body.innerHTML='<table style="width:100%;font-size:11px;border-collapse:collapse">'+
-          sorted.map(([c,n])=>`<tr><td style="padding:3px 8px;text-align:left;color:var(--text)">${c}</td><td style="padding:3px 8px;font-weight:600;color:var(--red)">${n}</td></tr>`).join('')+
+          sorted.map(([c,n])=>{
+            const phones=[...new Set(dropHourPhones[hk]&&dropHourPhones[hk][c]?dropHourPhones[hk][c]:[])];
+            const pid='dph-'+hk+'-'+c.replace(/\W/g,'');
+            return `<tr>
+              <td style="padding:3px 8px;text-align:left;color:var(--text)">${c}</td>
+              <td style="padding:3px 8px"><span style="font-weight:600;color:var(--red);cursor:pointer;text-decoration:underline dotted" onclick="toggleEl('${pid}')">${n}</span></td>
+            </tr>
+            <tr id="${pid}" style="display:none">
+              <td colspan="2" style="padding:2px 8px 8px 24px;color:var(--text-muted);font-size:10px;font-family:monospace">${phones.join('  ·  ')||'—'}</td>
+            </tr>`;
+          }).join('')+
           '</table>';
         detail.style.display='block';
       }
