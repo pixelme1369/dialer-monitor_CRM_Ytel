@@ -115,6 +115,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 .agent-main-row:hover{background:var(--gray-100)}
 .agent-toggle{font-size:9px;color:var(--text-muted);margin-right:4px;display:inline-block;transition:transform .15s}
 .agent-hour-row td{background:var(--gray-50);font-size:11px;color:var(--text-muted)}
+.camp-agent-row td{background:var(--gray-50);font-size:11px;color:var(--text-muted)}
 .bar-mini{display:inline-flex;align-items:center;gap:5px}
 .bar-bg{background:var(--gray-200);border-radius:3px;height:6px;width:60px;overflow:hidden;display:inline-block;vertical-align:middle}
 .bar-fg{height:100%;border-radius:3px;background:var(--blue)}
@@ -354,6 +355,13 @@ function fmtDur(s){
 function pct(n,d){ return d?((n/d)*100).toFixed(1)+'%':'0%'; }
 function fmt$(n){ return '$'+Math.round(n).toLocaleString(); }
 function toggleAgentHours(rowId){
+  const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
+  const tog=document.getElementById('tog-'+rowId);
+  const hidden=rows[0]&&rows[0].style.display==='none';
+  rows.forEach(r=>r.style.display=hidden?'':'none');
+  if(tog) tog.textContent=hidden?'▼':'▶';
+}
+function toggleCampAgents(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
   const tog=document.getElementById('tog-'+rowId);
   const hidden=rows[0]&&rows[0].style.display==='none';
@@ -798,6 +806,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
 
   // ── Campaign table ──
   const campMap={};
+  const campAgentMap={};
   calls.forEach(r=>{
     const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,b2to10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
     const d=campMap[c]; d.calls++; d.sec+=r._sec;
@@ -808,14 +817,41 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
     if(r._sec>1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
     if(r._enrolled) d.enroll++;
+    // per-campaign per-agent
+    if(!campAgentMap[c]) campAgentMap[c]={};
+    const ag=r._name||'Unknown';
+    if(!campAgentMap[c][ag]) campAgentMap[c][ag]={calls:0,short:0,sec:0,lt2m:0,b2to10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
+    const da=campAgentMap[c][ag]; da.calls++; da.sec+=r._sec;
+    if(r._sec<=30) da.short++;
+    if(r._sec<120) da.lt2m++;
+    if(r._sec>=120&&r._sec<600) da.b2to10m++;
+    if(r._sec>900) da.gt15m++;
+    if(r._sec>1800) da.gt30m++;
+    if(['DROP','TIMEOT'].includes(r._status)) da.drops++;
+    if(r._enrolled) da.enroll++;
   });
 
   const typeOrder={Marketing:0,Manual:1,Other:2,VDCL:3};
   const campRows=Object.entries(campMap).sort((a,b)=>(typeOrder[a[1].type]||9)-(typeOrder[b[1].type]||9)||b[1].calls-a[1].calls);
   const typeTag={Marketing:'<span class="tag mkt">Marketing</span>',Manual:'<span class="tag man">Manual</span>',VDCL:'<span class="tag vdcl">VDCL</span>',Other:'<span class="tag oth">Other</span>'};
-  document.getElementById('campBody').innerHTML=campRows.map(([camp,d])=>`
-    <tr>
-      <td>${camp}</td>
+  document.getElementById('campBody').innerHTML=campRows.map(([camp,d],i)=>{
+    const rowId='camp-ag-'+i;
+    const agentRows=Object.entries(campAgentMap[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
+    const agentSubRows=agentRows.map(([ag,a])=>`
+      <tr class="camp-agent-row" style="display:none" data-parent="${rowId}">
+        <td style="text-align:left;padding-left:32px;color:var(--text-muted);font-size:11px">↳ ${ag}</td>
+        <td>${a.calls}</td>
+        <td>${a.short} <span style="color:var(--text-muted);font-size:11px">${pct(a.short,a.calls)}</span></td>
+        <td>${a.lt2m} <span style="color:var(--text-muted);font-size:11px">${pct(a.lt2m,a.calls)}</span></td>
+        <td>${a.b2to10m} <span style="color:var(--text-muted);font-size:11px">${pct(a.b2to10m,a.calls)}</span></td>
+        <td>${a.gt15m} <span style="color:var(--text-muted);font-size:11px">${pct(a.gt15m,a.calls)}</span></td>
+        <td>${a.gt30m} <span style="color:var(--text-muted);font-size:11px">${pct(a.gt30m,a.calls)}</span></td>
+        <td>${a.drops>0?'<span style="color:var(--red);font-weight:600">'+a.drops+'</span>':'—'}</td>
+        <td>${fmtDur(a.calls?Math.round(a.sec/a.calls):0)}</td>
+        <td class="${a.enroll>0?'enroll-num':'enroll-zero'}">${a.enroll||'—'}</td>
+      </tr>`).join('');
+    return `<tr id="${rowId}" style="cursor:pointer" onclick="toggleCampAgents('${rowId}')">
+      <td style="text-align:left"><span class="agent-toggle" id="tog-${rowId}">▶</span> ${camp}</td>
       <td>${d.calls}</td>
       <td>${d.short} <span style="color:var(--text-muted);font-size:11px">${pct(d.short,d.calls)}</span></td>
       <td>${d.lt2m} <span style="color:var(--text-muted);font-size:11px">${pct(d.lt2m,d.calls)}</span></td>
@@ -825,7 +861,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       <td>${d.drops>0?'<span style="color:var(--red);font-weight:600">'+d.drops+'</span>':'—'}</td>
       <td>${fmtDur(d.calls?Math.round(d.sec/d.calls):0)}</td>
       <td class="${d.enroll>0?'enroll-num':'enroll-zero'}">${d.enroll||'—'}</td>
-    </tr>`).join('');
+    </tr>${agentSubRows}`;
+  }).join('');
 
   // Campaign table totals row
   const cTot=campRows.reduce((t,[,d])=>({
