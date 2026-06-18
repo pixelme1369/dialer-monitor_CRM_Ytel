@@ -317,6 +317,16 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     </div>
   </div>
 
+  <!-- DROPS & TIMEOUTS BY HOUR -->
+  <div class="card">
+    <div class="card-title">Drops &amp; Timeouts by Hour <span class="card-title-sub">click a bar to see campaign breakdown</span></div>
+    <div class="chart-wrap" style="height:160px"><canvas id="dropHourChart"></canvas></div>
+    <div id="dropHourDetail" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <div id="dropHourDetailTitle" style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px"></div>
+      <div id="dropHourDetailBody"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- EMPTY STATE -->
@@ -330,7 +340,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-let mergedRaw = null, hourChart = null, vdclChart = null;
+let mergedRaw = null, hourChart = null, vdclChart = null, dropHourChart = null;
 
 const CMAP = {'LenderPr':'LenderProcessing','USAbrigh':'USAbright','PLIinbou':'PLIinbound','AGENTDIR':'AGENTDIRECT'};
 const MKT = new Set(['LenderProcessing','USAbright','PLIinbound','BlueSuccess']);
@@ -483,6 +493,8 @@ function clearAll(){
   document.getElementById('emptyState').style.display='flex';
   if(hourChart){ hourChart.destroy(); hourChart=null; }
   if(vdclChart){ vdclChart.destroy(); vdclChart=null; }
+  if(dropHourChart){ dropHourChart.destroy(); dropHourChart=null; }
+  document.getElementById('dropHourDetail').style.display='none';
 }
 
 // ── Run analysis ──────────────────────────────────────────────────────────────
@@ -959,6 +971,49 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, totalEnrolledC
       borderColor:'#DC2626',borderWidth:1,borderRadius:2}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
       scales:{x:{ticks:{font:{size:8},maxRotation:60},grid:{display:false}},y:{ticks:{font:{size:8}},grid:{color:'rgba(0,0,0,0.04)'}}}}
+  });
+
+  // ── Drops & Timeouts by hour chart ──
+  const dropHour={}, timeoutHour={}, dropHourCamps={};
+  for(let i=0;i<24;i++){ const h=String(i).padStart(2,'0'); dropHour[h]=0; timeoutHour[h]=0; dropHourCamps[h]={}; }
+  calls.forEach(r=>{
+    const h=r._hour; if(h===undefined||h===null) return;
+    const hk=String(parseInt(h)).padStart(2,'0');
+    if(r._status==='DROP'){ dropHour[hk]=(dropHour[hk]||0)+1; }
+    if(r._status==='TIMEOT'){ timeoutHour[hk]=(timeoutHour[hk]||0)+1; }
+    if(['DROP','TIMEOT'].includes(r._status)){
+      if(!dropHourCamps[hk]) dropHourCamps[hk]={};
+      dropHourCamps[hk][r._campaign]=(dropHourCamps[hk][r._campaign]||0)+1;
+    }
+  });
+  const dctx=document.getElementById('dropHourChart').getContext('2d');
+  if(dropHourChart) dropHourChart.destroy();
+  dropHourChart=new Chart(dctx,{
+    type:'bar',
+    data:{labels:hrs.map(h=>h+':00'),datasets:[
+      {label:'Drops',data:hrs.map(h=>dropHour[h]),backgroundColor:'rgba(220,38,38,0.6)',borderColor:'#DC2626',borderWidth:1,borderRadius:2},
+      {label:'Timeouts',data:hrs.map(h=>timeoutHour[h]),backgroundColor:'rgba(217,119,6,0.6)',borderColor:'#D97706',borderWidth:1,borderRadius:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:10}}},
+      scales:{x:{stacked:false,ticks:{font:{size:8},maxRotation:60},grid:{display:false}},y:{ticks:{font:{size:8}},grid:{color:'rgba(0,0,0,0.04)'}}},
+      onClick(evt,els){
+        if(!els.length) return;
+        const idx=els[0].index;
+        const hk=hrs[idx];
+        const camps=dropHourCamps[hk]||{};
+        const sorted=Object.entries(camps).sort((a,b)=>b[1]-a[1]);
+        const detail=document.getElementById('dropHourDetail');
+        const title=document.getElementById('dropHourDetailTitle');
+        const body=document.getElementById('dropHourDetailBody');
+        if(!sorted.length){ detail.style.display='none'; return; }
+        title.textContent=hk+':00 — '+(dropHour[hk]+timeoutHour[hk])+' drops/timeouts by campaign:';
+        body.innerHTML='<table style="width:100%;font-size:11px;border-collapse:collapse">'+
+          sorted.map(([c,n])=>`<tr><td style="padding:3px 8px;text-align:left;color:var(--text)">${c}</td><td style="padding:3px 8px;font-weight:600;color:var(--red)">${n}</td></tr>`).join('')+
+          '</table>';
+        detail.style.display='block';
+      }
+    }
   });
 
   document.getElementById('dashboard').style.display='flex';
