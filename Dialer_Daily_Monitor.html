@@ -262,6 +262,27 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     </div>
   </div>
 
+  <!-- AGENT FUNNEL RATIO TABLE -->
+  <div class="card">
+    <div class="card-title">Agent call funnel — % of total calls <span class="card-title-sub">click column to sort</span></div>
+    <div class="tbl-wrap">
+      <table id="funnelTable">
+        <thead id="funnelHead">
+          <tr>
+            <th style="text-align:left;min-width:160px" data-col="0">Agent</th>
+            <th data-col="1">&lt;2 min</th>
+            <th data-col="2">&gt;2 min</th>
+            <th data-col="3">&gt;5 min</th>
+            <th data-col="4">&gt;10 min</th>
+            <th data-col="5">&gt;15 min</th>
+            <th data-col="6">&gt;30 min</th>
+          </tr>
+        </thead>
+        <tbody id="funnelBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- CAMPAIGN TABLE -->
   <div class="card">
     <div class="card-title">Campaign / queue breakdown</div>
@@ -869,6 +890,41 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     <td>${agTot.debt>0?fmt$(agTot.debt):'—'}</td>
     <td>—</td>
   </tr>`;
+
+  // ── Agent funnel ratio table ──
+  const fpct=(n,d)=>d>0?((n/d)*100).toFixed(1)+'%':'0%';
+  document.getElementById('funnelBody').innerHTML=agentRows.map(a=>`
+    <tr>
+      <td style="text-align:left;font-weight:600;color:var(--text)">${a.name}${OPENERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
+      <td style="color:var(--red)">${fpct(a.lt2m,a.calls)}</td>
+      <td>${fpct(a.gt2m,a.calls)}</td>
+      <td>${fpct(a.gt5m,a.calls)}</td>
+      <td>${fpct(a.gt10m,a.calls)}</td>
+      <td style="color:var(--green-dk)">${fpct(a.gt15m,a.calls)}</td>
+      <td style="color:var(--green-dk)">${fpct(a.gt30m,a.calls)}</td>
+    </tr>`).join('');
+
+  // Funnel table sorting
+  (function(){
+    const thead=document.getElementById('funnelHead');
+    const tbody=document.getElementById('funnelBody');
+    let sortCol=-1,sortDir=1;
+    thead.querySelectorAll('th[data-col]').forEach(th=>{
+      th.addEventListener('click',()=>{
+        const col=parseInt(th.dataset.col);
+        if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=-1;}
+        thead.querySelectorAll('th').forEach(h=>h.classList.remove('sort-asc','sort-desc'));
+        th.classList.add(sortDir===1?'sort-asc':'sort-desc');
+        const rows=[...tbody.querySelectorAll('tr')];
+        rows.sort((a,b)=>{
+          const av=parseFloat(a.cells[col].textContent)||0;
+          const bv=parseFloat(b.cells[col].textContent)||0;
+          return (av-bv)*sortDir;
+        });
+        rows.forEach(r=>tbody.appendChild(r));
+      });
+    });
+  })();
 
   // ── Agent table column sorting ──
   (function(){
