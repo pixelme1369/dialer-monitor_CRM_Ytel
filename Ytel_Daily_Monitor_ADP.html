@@ -812,8 +812,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     enrolled:anyEnrolledPhone.has(p)
   }));
   const allMissedCamps=[...new Set(missedData.flatMap(d=>d.camps))].sort();
-  const campSel=document.getElementById('missedCampFilter');
-  campSel.innerHTML='<option value="">All Campaigns</option>'+allMissedCamps.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const missedCampSel=document.getElementById('missedCampFilter');
+  missedCampSel.innerHTML='<option value="">All Campaigns</option>'+allMissedCamps.map(c=>`<option value="${c}">${c}</option>`).join('');
   window._missedData=missedData;
   const card=document.getElementById('missedCallbackCard');
   if(missedPhones.length){ card.style.display=''; renderMissedCallbacks(); }
