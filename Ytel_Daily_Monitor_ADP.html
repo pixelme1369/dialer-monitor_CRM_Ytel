@@ -317,7 +317,14 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
   <!-- CAMPAIGN TABLE -->
   <div class="card">
-    <div class="card-title">Campaign / queue breakdown</div>
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>Campaign / queue breakdown</span>
+      <select id="campDirFilter" onchange="filterCampDir()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+        <option value="">All Directions</option>
+        <option value="inbound">Inbound</option>
+        <option value="outbound">Outbound</option>
+      </select>
+    </div>
     <div class="tbl-wrap">
       <table id="campTable">
         <thead id="campHead">
@@ -473,6 +480,12 @@ function filterAgents(type){
     document.getElementById('agentCount').textContent=rows.length+' agents';
     window.renderAgentBody(rows);
   }
+}
+function filterCampDir(){
+  const dir=document.getElementById('campDirFilter')?.value||'';
+  if(!window.renderCampBody) return;
+  if(!dir) window.renderCampBody(window._campMap||{});
+  else window.renderCampBody((window._campDirMap||{})[dir]||{});
 }
 function toggleAgentHours(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
@@ -1140,6 +1153,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
 
   // ── Campaign table ──
   const campMap={};
+  const campDirMap={inbound:{},outbound:{}}; // direction-filtered camp stats
   const campAgentMap={};
   calls.forEach(r=>{
     const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
@@ -1153,6 +1167,19 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._sec>=1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
     if(r._enrolled) d.enroll++;
+    // direction breakdown
+    const dir=r._dir==='inbound'?'inbound':'outbound';
+    if(!campDirMap[dir][c]) campDirMap[dir][c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
+    const dd=campDirMap[dir][c]; dd.calls++; dd.sec+=r._sec;
+    if(r._sec<=30) dd.short++;
+    if(r._sec<120) dd.lt2m++;
+    if(r._sec>=120) dd.gt2m++;
+    if(r._sec>=300) dd.gt5m++;
+    if(r._sec>=600) dd.gt10m++;
+    if(r._sec>=900) dd.gt15m++;
+    if(r._sec>=1800) dd.gt30m++;
+    if(['DROP','TIMEOT'].includes(r._status)) dd.drops++;
+    if(r._enrolled) dd.enroll++;
     // per-campaign per-agent
     if(!campAgentMap[c]) campAgentMap[c]={};
     const ag=r._name||'Unknown';
@@ -1169,8 +1196,12 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._enrolled) da.enroll++;
   });
 
+  window._campMap=campMap;
+  window._campDirMap=campDirMap;
+
   const typeOrder={Marketing:0,Manual:1,Other:2,VDCL:3};
-  const campRows=Object.entries(campMap).sort((a,b)=>(typeOrder[a[1].type]||9)-(typeOrder[b[1].type]||9)||b[1].calls-a[1].calls);
+  window.renderCampBody=function(sourceMap){
+  const campRows=Object.entries(sourceMap).sort((a,b)=>(typeOrder[a[1].type]||9)-(typeOrder[b[1].type]||9)||b[1].calls-a[1].calls);
   const typeTag={Marketing:'<span class="tag mkt">Marketing</span>',Manual:'<span class="tag man">Manual</span>',VDCL:'<span class="tag vdcl">VDCL</span>',Other:'<span class="tag oth">Other</span>'};
   document.getElementById('campBody').innerHTML=campRows.map(([camp,d],i)=>{
     const rowId='camp-ag-'+i;
@@ -1229,6 +1260,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     <td class="${cTot.enroll>0?'enroll-num':'enroll-zero'}">${cTot.enroll||'—'}</td>
     <td>${cTot.gt5m>0&&cTot.enroll>0?pct(cTot.enroll,cTot.gt5m):'—'}</td>
   </tr>`;
+  }; // end renderCampBody
+
+  renderCampBody(campMap);
 
   // ── Campaign table column sorting ──
   (function(){
