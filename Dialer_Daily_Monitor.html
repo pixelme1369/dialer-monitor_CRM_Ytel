@@ -715,6 +715,23 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const mktConv=mktCalls.length?totalEnrolled/mktCalls.length*100:0;
   if(mktConv<5 && mktCalls.length>50) issues.push({sev:'high',title:'Marketing conversion below 5% ('+mktConv.toFixed(1)+'%)',detail:'Only '+totalEnrolled+' enrollments from '+mktCalls.length+' marketing calls. Route marketing queues to proven closers only and audit PLIinbound routing.'});
 
+  // Flag agents dialing same number outbound > 15 times
+  const agentPhoneOutCounts={};
+  calls.forEach(r=>{
+    if(r._dir==='outbound'&&r._phone&&r._name){
+      const key=r._name+'||'+r._phone;
+      agentPhoneOutCounts[key]=(agentPhoneOutCounts[key]||0)+1;
+    }
+  });
+  const excessiveRedials=Object.entries(agentPhoneOutCounts)
+    .filter(([,n])=>n>15)
+    .map(([key,n])=>{ const [agent,phone]=key.split('||'); return {agent,phone,n}; })
+    .sort((a,b)=>b.n-a.n);
+  if(excessiveRedials.length){
+    const detail=excessiveRedials.map(e=>`${e.agent} → ${e.phone} (${e.n}x)`).join('\n');
+    issues.push({sev:'high',title:`${excessiveRedials.length} agent/number pair${excessiveRedials.length>1?'s':''} dialed outbound >15 times`,detail:'Repeated dialing of the same number wastes time and risks DNC complaints.\n\n'+detail});
+  }
+
   if(issues.length===0) issues.push({sev:'ok',title:'No critical issues detected on '+dateStr,detail:'All key metrics within acceptable ranges. Keep monitoring daily.'});
 
   document.getElementById('issuesGrid').innerHTML=issues.map(iss=>`
