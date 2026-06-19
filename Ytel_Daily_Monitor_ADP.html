@@ -405,7 +405,7 @@ function funnelCell(val,denom,color){
   return `${val}<div style="font-size:9px;color:${color};margin-top:1px">${p}%</div>`;
 }
 function fmt$(n){ return '$'+Math.round(n).toLocaleString(); }
-const OPENERS=new Set(['spencer porterfield','abdelrhaman nianaa','mohamad dadou','stanley randolph','riley malone','jon stults','liz arredondo','lindsey magnusen','jaiden lopez','brian smith','walter urbina','tabitha jaggers','rachel calderon','mercy morse','joselyn lorenzo','joseph nassif','alexander tulkoff','darrin ford']);
+const CLOSERS=new Set(['peter godwin','adam elqaza','diego acuna','alon yomora','abed al serwan','josh hallwork','toha serwan','parth desai','robert whitmer','alexander wahlberg','artin namjoo','omar tayara','aj valipour','tyler mason','neka bullock','don bell','faisal habhab','amir moayeri','daniel arreola','shayan bakhoda','chuvar maestas','eileen beeson','logan insuaste','paul sims','john tade','dylan gallagher','lindsey magnusen','angel espraza','logan apana','brian smith','emren salim']);
 function toggleAgentHours(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
   const tog=document.getElementById('tog-'+rowId);
@@ -715,6 +715,23 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const mktConv=mktCalls.length?totalEnrolled/mktCalls.length*100:0;
   if(mktConv<5 && mktCalls.length>50) issues.push({sev:'high',title:'Marketing conversion below 5% ('+mktConv.toFixed(1)+'%)',detail:'Only '+totalEnrolled+' enrollments from '+mktCalls.length+' marketing calls. Route marketing queues to proven closers only and audit PLIinbound routing.'});
 
+  // Flag agents dialing same number outbound > 15 times
+  const agentPhoneOutCounts={};
+  calls.forEach(r=>{
+    if(r._dir==='outbound'&&r._phone&&r._name){
+      const key=r._name+'||'+r._phone;
+      agentPhoneOutCounts[key]=(agentPhoneOutCounts[key]||0)+1;
+    }
+  });
+  const excessiveRedials=Object.entries(agentPhoneOutCounts)
+    .filter(([,n])=>n>15)
+    .map(([key,n])=>{ const [agent,phone]=key.split('||'); return {agent,phone,n}; })
+    .sort((a,b)=>b.n-a.n);
+  if(excessiveRedials.length){
+    const detail=excessiveRedials.map(e=>`${e.agent} → ${e.phone} (${e.n}x)`).join('\n');
+    issues.push({sev:'high',title:`${excessiveRedials.length} agent/number pair${excessiveRedials.length>1?'s':''} dialed outbound >15 times`,detail:'Repeated dialing of the same number wastes time and risks DNC complaints.\n\n'+detail});
+  }
+
   if(issues.length===0) issues.push({sev:'ok',title:'No critical issues detected on '+dateStr,detail:'All key metrics within acceptable ranges. Keep monitoring daily.'});
 
   document.getElementById('issuesGrid').innerHTML=issues.map(iss=>`
@@ -870,7 +887,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         <td>—</td>
       </tr>`;
     }).join('');
-    const openerTag=OPENERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':'';
+    const openerTag=!CLOSERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':'';
     return `<tr class="agent-main-row" id="${rowId}" style="cursor:pointer" onclick="toggleAgentHours('${rowId}')">
       <td style="text-align:left"><span class="agent-toggle" id="tog-${rowId}">▶</span> ${a.name} ${openerTag}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxCalls*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
@@ -927,7 +944,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   };
   document.getElementById('funnelBody').innerHTML=agentRows.map(a=>`
     <tr>
-      <td style="text-align:left;font-weight:600;color:var(--text)">${a.name}${OPENERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
+      <td style="text-align:left;font-weight:600;color:var(--text)">${a.name}${!CLOSERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
       <td>${a.calls}</td>
       <td>${fcell(a.lt2m,a.calls,'var(--red)')}</td>
       <td>${fcell(a.gt2m,a.calls,null)}</td>
@@ -1031,7 +1048,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     const agentRows=Object.entries(campAgentMap[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
     const agentSubRows=agentRows.map(([ag,a])=>`
       <tr class="camp-agent-row" style="display:none" data-parent="${rowId}">
-        <td style="text-align:left;padding-left:32px;color:var(--text-muted);font-size:11px">↳ ${ag}${OPENERS.has(ag.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
+        <td style="text-align:left;padding-left:32px;color:var(--text-muted);font-size:11px">↳ ${ag}${!CLOSERS.has(ag.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
         <td>${a.calls}</td>
         <td>${a.short} <span style="color:var(--text-muted);font-size:11px">${pct(a.short,a.calls)}</span></td>
         <td>${funnelCell(a.lt2m,a.calls,"var(--red)")}</td>
