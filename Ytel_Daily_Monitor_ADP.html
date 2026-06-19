@@ -117,6 +117,9 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 .agent-hour-row td{background:var(--gray-50);font-size:11px;color:var(--text-muted)}
 .camp-agent-row td{background:var(--gray-50);font-size:11px;color:var(--text-muted)}
 .tag-opener{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border-radius:10px;background:#FEF3C7;color:#92400E;margin-left:4px;vertical-align:middle}
+.af-btn{font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;transition:all .15s}
+.af-btn:hover{background:var(--gray-200)}
+.af-btn.af-active{background:var(--navy);color:#fff;border-color:var(--navy)}
 .bar-mini{display:inline-flex;align-items:center;gap:5px}
 .bar-bg{background:var(--gray-200);border-radius:3px;height:6px;width:60px;overflow:hidden;display:inline-block;vertical-align:middle}
 .bar-fg{height:100%;border-radius:3px;background:var(--blue)}
@@ -239,7 +242,14 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
   <!-- AGENT TABLE -->
   <div class="card">
-    <div class="card-title">Agent performance <span class="card-title-sub" id="agentCount"></span></div>
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>Agent performance <span class="card-title-sub" id="agentCount"></span></span>
+      <div id="agentFilterBtns" style="display:flex;gap:6px">
+        <button onclick="filterAgents('all')"    id="af-all"    class="af-btn af-active">All</button>
+        <button onclick="filterAgents('closer')" id="af-closer" class="af-btn">Closers</button>
+        <button onclick="filterAgents('opener')" id="af-opener" class="af-btn">Openers</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table id="agentTable">
         <thead id="agentHead">
@@ -287,6 +297,18 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
         </thead>
         <tbody id="funnelBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- AGENT RANKINGS -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Best openers <span class="card-title-sub">calls that reached &gt;5 min ÷ total calls — top 10</span></div>
+      <div id="rankOpenerList"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Best closers <span class="card-title-sub">calls that reached &gt;15 min ÷ total calls — top 10</span></div>
+      <div id="rankCloserList"></div>
     </div>
   </div>
 
@@ -406,6 +428,25 @@ function funnelCell(val,denom,color){
 }
 function fmt$(n){ return '$'+Math.round(n).toLocaleString(); }
 const CLOSERS=new Set(['peter godwin','adam elqaza','diego acuna','alon yomora','abed al serwan','josh hallwork','toha serwan','parth desai','robert whitmer','alexander wahlberg','artin namjoo','omar tayara','aj valipour','tyler mason','neka bullock','don bell','faisal habhab','amir moayeri','daniel arreola','shayan bakhoda','chuvar maestas','eileen beeson','logan insuaste','paul sims','john tade','dylan gallagher','lindsey magnusen','angel espraza','logan apana','brian smith','emren salim']);
+function filterAgents(type){
+  document.querySelectorAll('.af-btn').forEach(b=>b.classList.remove('af-active'));
+  document.getElementById('af-'+type).classList.add('af-active');
+  const tbody=document.getElementById('agentBody');
+  if(!tbody) return;
+  tbody.querySelectorAll('tr.agent-main-row').forEach(row=>{
+    const nameCell=row.querySelector('td:first-child');
+    const name=(nameCell?.textContent||'').trim().replace(/[▶▼]/,'').replace('Opener','').trim().toLowerCase();
+    const isOpener=!CLOSERS.has(name);
+    let show=true;
+    if(type==='closer') show=!isOpener;
+    if(type==='opener') show=isOpener;
+    row.style.display=show?'':'none';
+    // hide/show hourly sub-rows too
+    if(row.id) document.querySelectorAll('[data-parent="'+row.id+'"]').forEach(sub=>sub.style.display=show?'none':'');
+  });
+  // always keep total row visible
+  tbody.querySelectorAll('tr:not(.agent-main-row):not(.agent-hour-row)').forEach(r=>r.style.display='');
+}
 function toggleAgentHours(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
   const tog=document.getElementById('tog-'+rowId);
@@ -861,6 +902,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   document.getElementById('agentBody').innerHTML=agentRows.map((a,i)=>{
     const convPct=a.gt5m>0&&a.enr>0?pct(a.enr,a.gt5m):'—';
     const shortCls=a.shortPct>55?'bad':'';
+    const isOpener=!CLOSERS.has(a.name.toLowerCase());
+    const gt2mPct=a.calls>0?a.gt2m/a.calls*100:0;
+    const gt2mCell=isOpener
+      ? `${a.gt2m}<div style="font-size:9px;font-weight:700;color:${gt2mPct>=50?'var(--green-dk)':'var(--red)'};margin-top:1px">${gt2mPct.toFixed(0)}%</div>`
+      : funnelCell(a.gt2m,0,null);
     const rowId='agent-hr-'+i;
     const hours=agentHourMap[a.name]||{};
     const hourKeys=Object.keys(hours).sort();
@@ -896,7 +942,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       <td style="color:var(--text-muted)">${a.outboundUniq}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg ${shortCls}" style="width:${a.shortPct.toFixed(0)}%"></div></div>${a.shortPct.toFixed(0)}%</div></td>
       <td>${funnelCell(a.lt2m,a.calls,"var(--red)")}</td>
-      <td>${funnelCell(a.gt2m,0,null)}</td>
+      <td>${gt2mCell}</td>
       <td>${funnelCell(a.gt5m,0,null)}</td>
       <td>${funnelCell(a.gt10m,0,null)}</td>
       <td>${funnelCell(a.gt15m,a.calls,"var(--green-dk)")}</td>
@@ -1008,6 +1054,33 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       });
     });
   })();
+
+  // ── Agent rankings ──
+  function rankList(rows, scoreFn, labelFn, containerId, goodColor, badColor){
+    const MIN_CALLS = 20;
+    const ranked = rows.filter(a=>a.calls>=MIN_CALLS)
+      .map(a=>({name:a.name, calls:a.calls, score:scoreFn(a)}))
+      .sort((a,b)=>b.score-a.score);
+    const top = ranked.slice(0,10);
+    const maxScore = top[0]?top[0].score:1;
+    document.getElementById(containerId).innerHTML = top.map((a,i)=>{
+      const color = i<3 ? goodColor : (i>=ranked.length-3 ? badColor : 'var(--blue)');
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <div style="width:22px;text-align:right;font-size:11px;color:var(--text-muted);flex-shrink:0">${medal||('#'+(i+1))}</div>
+        <div style="flex:1;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+        <div style="width:120px;flex-shrink:0">
+          <div style="background:var(--gray-200);border-radius:3px;height:6px;overflow:hidden">
+            <div style="background:${color};height:100%;width:${(a.score/maxScore*100).toFixed(0)}%;border-radius:3px"></div>
+          </div>
+        </div>
+        <div style="width:52px;text-align:right;font-size:12px;font-weight:700;color:${color};flex-shrink:0">${a.score.toFixed(1)}%</div>
+        <div style="width:38px;text-align:right;font-size:10px;color:var(--text-muted);flex-shrink:0">${a.calls}c</div>
+      </div>`;
+    }).join('')||'<div style="font-size:12px;color:var(--text-muted);padding:8px 0">Not enough data (min 20 calls)</div>';
+  }
+  rankList(agentRows, a=>a.calls>0?a.gt5m/a.calls*100:0,  null, 'rankOpenerList', 'var(--blue)',    'var(--red)');
+  rankList(agentRows, a=>a.calls>0?a.gt15m/a.calls*100:0, null, 'rankCloserList', 'var(--green-dk)','var(--red)');
 
   // ── Campaign table ──
   const campMap={};
