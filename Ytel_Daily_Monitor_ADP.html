@@ -244,10 +244,13 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
   <div class="card">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <span>Agent performance <span class="card-title-sub" id="agentCount"></span></span>
-      <div id="agentFilterBtns" style="display:flex;gap:6px">
+      <div id="agentFilterBtns" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <button onclick="filterAgents('all')"    id="af-all"    class="af-btn af-active">All</button>
         <button onclick="filterAgents('closer')" id="af-closer" class="af-btn">Closers</button>
         <button onclick="filterAgents('opener')" id="af-opener" class="af-btn">Openers</button>
+        <select id="af-camp" onchange="filterAgents()" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Campaigns</option>
+        </select>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -427,10 +430,15 @@ function funnelCell(val,denom,color){
   return `${val}<div style="font-size:9px;color:${color};margin-top:1px">${p}%</div>`;
 }
 function fmt$(n){ return '$'+Math.round(n).toLocaleString(); }
-const CLOSERS=new Set(['peter godwin','adam elqaza','diego acuna','alon yomora','abed al serwan','josh hallwork','toha serwan','parth desai','robert whitmer','alexander wahlberg','artin namjoo','omar tayara','aj valipour','tyler mason','neka bullock','don bell','faisal habhab','amir moayeri','daniel arreola','shayan bakhoda','chuvar maestas','eileen beeson','logan insuaste','paul sims','john tade','dylan gallagher','lindsey magnusen','angel espraza','logan apana','brian smith','emren salim']);
+const CLOSERS=new Set(['peter godwin','adam elqaza','diego acuna','alon yomora','abed al serwan','josh hallwork','toha serwan','parth desai','robert whitmer','alexander wahlberg','artin namjoo','omar tayara','aj valipour','tyler mason','neka bullock','don bell','faisal habhab','amir moayeri','daniel arreola','shayan bakhoda','chuvar maestas','eileen beeson','logan insuaste','paul sims','paul simms','john tade','dylan gallagher','lindsey magnusen','angel espraza','logan apana','brian smith','emren salim','alex tambouly']);
+let _agentRoleFilter='all';
 function filterAgents(type){
-  document.querySelectorAll('.af-btn').forEach(b=>b.classList.remove('af-active'));
-  document.getElementById('af-'+type).classList.add('af-active');
+  if(type) {
+    _agentRoleFilter=type;
+    document.querySelectorAll('.af-btn').forEach(b=>b.classList.remove('af-active'));
+    document.getElementById('af-'+type).classList.add('af-active');
+  }
+  const campFilter=(document.getElementById('af-camp')?.value||'').toLowerCase();
   const tbody=document.getElementById('agentBody');
   if(!tbody) return;
   tbody.querySelectorAll('tr.agent-main-row').forEach(row=>{
@@ -438,17 +446,16 @@ function filterAgents(type){
     const name=(nameCell?.textContent||'').trim().replace(/[▶▼]/,'').replace('Opener','').trim().toLowerCase();
     const isOpener=!CLOSERS.has(name);
     let show=true;
-    if(type==='closer') show=!isOpener;
-    if(type==='opener') show=isOpener;
+    if(_agentRoleFilter==='closer') show=!isOpener;
+    if(_agentRoleFilter==='opener') show=isOpener;
+    if(show && campFilter) show=!!(row.dataset.camps||'').toLowerCase().includes(campFilter);
     row.style.display=show?'':'none';
-    // always collapse hourly sub-rows when filtering
     if(row.id){
       document.querySelectorAll('[data-parent="'+row.id+'"]').forEach(sub=>sub.style.display='none');
       const tog=document.getElementById('tog-'+row.id);
       if(tog) tog.textContent='▶';
     }
   });
-  // always keep total row visible
   tbody.querySelectorAll('tr:not(.agent-main-row):not(.agent-hour-row)').forEach(r=>r.style.display='');
 }
 function toggleAgentHours(rowId){
@@ -852,6 +859,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
 
   const agentMap={};
   const agentHourMap={};
+  const agentCampsMap={};
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
     if(!agentMap[r._name]) agentMap[r._name]={calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,phones:new Set(),enrolledPhones:new Set()};
     const d=agentMap[r._name]; d.calls++; d.sec+=r._sec;
@@ -863,6 +871,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._sec>=900) d.gt15m++;
     if(r._sec>=1800) d.gt30m++;
     if(r._phone) d.phones.add(r._phone);
+    if(r._campaign){ if(!agentCampsMap[r._name]) agentCampsMap[r._name]=new Set(); agentCampsMap[r._name].add(r._campaign); }
     // hourly breakdown
     const hr=parseInt(r._hour);
     if(!isNaN(hr)){
@@ -903,6 +912,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
   document.getElementById('agentCount').textContent=agentRows.length+' agents';
+  // Populate campaign dropdown
+  const allCamps=[...new Set(calls.map(r=>r._campaign).filter(Boolean))].sort();
+  const campSel=document.getElementById('af-camp');
+  if(campSel){ campSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
   document.getElementById('agentBody').innerHTML=agentRows.map((a,i)=>{
     const convPct=a.gt5m>0&&a.enr>0?pct(a.enr,a.gt5m):'—';
     const shortCls=a.shortPct>55?'bad':'';
@@ -938,7 +951,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       </tr>`;
     }).join('');
     const openerTag=!CLOSERS.has(a.name.toLowerCase())?'<span class="tag-opener">Opener</span>':'';
-    return `<tr class="agent-main-row" id="${rowId}" style="cursor:pointer" onclick="toggleAgentHours('${rowId}')">
+    const agentCamps=[...(agentCampsMap[a.name]||[])].join('|');
+    return `<tr class="agent-main-row" id="${rowId}" data-camps="${agentCamps}" style="cursor:pointer" onclick="toggleAgentHours('${rowId}')">
       <td style="text-align:left"><span class="agent-toggle" id="tog-${rowId}">▶</span> ${a.name} ${openerTag}</td>
       <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg" style="width:${(a.calls/maxCalls*100).toFixed(0)}%"></div></div>${a.calls}</div></td>
       <td>${a.uniqueCalls}</td>
