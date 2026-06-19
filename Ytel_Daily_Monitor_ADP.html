@@ -594,12 +594,7 @@ function parseTs(val){
 function getDateStr(val){
   if(!val && val!==0) return '';
   if(val instanceof Date){
-    // Date-only cells (e.g. Cordoba Enrolled Date) arrive as UTC midnight from SheetJS — use UTC parts.
-    // Datetime cells (e.g. call_date with a time component) store local time "as UTC" — use local parts.
-    if(val.getUTCHours()===0&&val.getUTCMinutes()===0&&val.getUTCSeconds()===0){
-      const y=val.getUTCFullYear(),mo=String(val.getUTCMonth()+1).padStart(2,'0'),d=String(val.getUTCDate()).padStart(2,'0');
-      return `${y}-${mo}-${d}`;
-    }
+    // Use local date parts — toISOString() is UTC and shifts the date in east-of-UTC timezones
     const y=val.getFullYear(),mo=String(val.getMonth()+1).padStart(2,'0'),d=String(val.getDate()).padStart(2,'0');
     return `${y}-${mo}-${d}`;
   }
