@@ -1198,8 +1198,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     const tbody=document.getElementById('campBody');
     let sortCol=-1, sortDir=1;
     function cellVal(td){
-      const n=parseFloat(td.textContent.replace(/[^0-9.\-]/g,''));
-      return isNaN(n)?td.textContent.trim().toLowerCase():n;
+      const txt=td.textContent.trim();
+      if(txt==='—'||txt==='') return -Infinity;
+      const n=parseFloat(txt.replace(/[^0-9.\-]/g,''));
+      return isNaN(n)?txt.toLowerCase():n;
     }
     thead.querySelectorAll('th[data-col]').forEach(th=>{
       th.addEventListener('click',()=>{
@@ -1207,12 +1209,19 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=-1;}
         thead.querySelectorAll('th').forEach(h=>{h.classList.remove('sort-asc','sort-desc');});
         th.classList.add(sortDir===1?'sort-asc':'sort-desc');
-        const rows=[...tbody.querySelectorAll('tr')];
-        rows.sort((a,b)=>{
+        const allRows=[...tbody.querySelectorAll('tr')];
+        const totRow=allRows.find(r=>r.querySelector('td')?.textContent.trim()==='TOTAL');
+        const campRows=allRows.filter(r=>!r.classList.contains('camp-agent-row')&&r!==totRow);
+        campRows.sort((a,b)=>{
           const av=cellVal(a.cells[col]), bv=cellVal(b.cells[col]);
           return av<bv?-sortDir:av>bv?sortDir:0;
         });
-        rows.forEach(r=>tbody.appendChild(r));
+        campRows.forEach(main=>{
+          tbody.appendChild(main);
+          const pid=main.id;
+          if(pid) allRows.filter(r=>r.dataset.parent===pid).forEach(sub=>tbody.appendChild(sub));
+        });
+        if(totRow) tbody.appendChild(totRow);
       });
     });
   })();
