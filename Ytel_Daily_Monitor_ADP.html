@@ -461,7 +461,7 @@ function filterAgents(type){
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>!CLOSERS.has(a.name.toLowerCase()));
     document.getElementById('agentCount').textContent=rows.length+' agents ('+campFilter+')';
     // re-render using existing render function
-    renderAgentBody(rows);
+    window.renderAgentBody(rows);
     return;
   }
 
@@ -471,7 +471,7 @@ function filterAgents(type){
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>!CLOSERS.has(a.name.toLowerCase()));
     document.getElementById('agentCount').textContent=rows.length+' agents';
-    renderAgentBody(rows);
+    window.renderAgentBody(rows);
   }
 }
 function toggleAgentHours(rowId){
@@ -955,7 +955,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const allCamps=[...new Set(calls.map(r=>r._campaign).filter(Boolean))].sort();
   const campSel=document.getElementById('af-camp');
   if(campSel){ campSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
-  function renderAgentBody(rows){
+  window.renderAgentBody=function renderAgentBody(rows){
     const maxC=rows[0]?rows[0].calls:1;
     const enrollPhones=window._agentEnrollPhones||agentEnrollPhones;
     document.getElementById('agentBody').innerHTML=rows.map((a,i)=>{
