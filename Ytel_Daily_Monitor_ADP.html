@@ -747,6 +747,34 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
 
   // ── Issues ──
   const issues=[];
+
+  // ── Missed callbacks (always runs, not gated on drop rate) ──────────────────
+  // Find all inbound TIMEOT phones and check if any outbound call followed
+  const timeoutTs={};       // phone → latest inbound TIMEOT timestamp
+  const timeoutAgents={};   // phone → Set of agents who timed out
+  calls.forEach(r=>{
+    if(r._status==='TIMEOT'&&r._dir==='inbound'&&r._phone){
+      const ts=parseTs(r['call_date']||r['date']||'');
+      if(!timeoutTs[r._phone]||ts>timeoutTs[r._phone]) timeoutTs[r._phone]=ts;
+      if(!timeoutAgents[r._phone]) timeoutAgents[r._phone]=new Set();
+      if(r._name&&r._name!=='Unknown') timeoutAgents[r._phone].add(r._name);
+    }
+  });
+  const calledBack=new Set();
+  calls.forEach(r=>{
+    if(r._dir==='outbound'&&r._phone&&timeoutTs[r._phone]){
+      const ts=parseTs(r['call_date']||r['date']||'');
+      if(ts>timeoutTs[r._phone]) calledBack.add(r._phone);
+    }
+  });
+  const missedPhones=Object.keys(timeoutTs).filter(p=>!calledBack.has(p));
+  if(missedPhones.length){
+    const detail=missedPhones.map(p=>{
+      const agents=[...(timeoutAgents[p]||[])].join(', ')||'—';
+      return `${p}  (timed out on: ${agents})`;
+    }).join('\n');
+    issues.push({sev:'crit',title:`${missedPhones.length} client${missedPhones.length>1?'s':''} called in, timed out, and were NEVER called back`,detail:'These clients reached out and waited — no agent picked up and no one followed up.\n\n'+detail});
+  }
   const vdclAfterHours=vdclCalls.filter(r=>parseInt(r._hour)>=18).length;
   const shortPct=deadCalls/total*100;
   const dropPct=drops/total*100;
@@ -760,33 +788,14 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   if(shortPct>30) issues.push({sev:'high',title:deadCalls.toLocaleString()+' calls ≤30s ('+shortPct.toFixed(1)+'% dead weight)',detail:'Over 30% of calls ended before any real conversation. This is list quality degradation and/or agents hanging up early. Pull recordings for top-volume agents with highest short rates.'});
   if(dropPct>5){
     const agentDrops={},agentTimeouts={};
-    const timeoutPhones=[];
-    // Build map: phone → latest TIMEOT inbound timestamp
-    const timeoutTs={};
     calls.forEach(r=>{
       const n=r._name||'Unknown';
-      if(r._status==='DROP'){agentDrops[n]=(agentDrops[n]||0)+1;}
-      if(r._status==='TIMEOT'){
-        agentTimeouts[n]=(agentTimeouts[n]||0)+1;
-        if(r._phone&&r._dir==='inbound'){
-          const ts=parseTs(r['call_date']||r['date']||'');
-          if(!timeoutTs[r._phone]||ts>timeoutTs[r._phone]) timeoutTs[r._phone]=ts;
-        }
-      }
-    });
-    // Build set of phones that received an outbound call AFTER their timeout
-    const calledBack=new Set();
-    calls.forEach(r=>{
-      if(r._dir==='outbound'&&r._phone&&timeoutTs[r._phone]){
-        const ts=parseTs(r['call_date']||r['date']||'');
-        if(ts>timeoutTs[r._phone]) calledBack.add(r._phone);
-      }
+      if(r._status==='DROP') agentDrops[n]=(agentDrops[n]||0)+1;
+      if(r._status==='TIMEOT') agentTimeouts[n]=(agentTimeouts[n]||0)+1;
     });
     const topDrops=Object.entries(agentDrops).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' ('+c+')').join(', ')||'—';
     const topTimeouts=Object.entries(agentTimeouts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' ('+c+')').join(', ')||'—';
-    const uniqueTimeoutPhones=Object.keys(timeoutTs).filter(p=>!calledBack.has(p));
-    const phoneList=uniqueTimeoutPhones.length?uniqueTimeoutPhones.join(' · '):'—';
-    issues.push({sev:'high',title:'Drop/timeout rate at '+pct(drops,total)+' ('+drops+' calls)',detail:'Higher than the 5% acceptable threshold. Check queue depth, agent availability settings, and shift scheduling against call volume.\n\nMost Drops: '+topDrops+'\nMost Timeouts: '+topTimeouts+'\n\nMissed Callers not called back ('+uniqueTimeoutPhones.length+' numbers):\n'+phoneList});
+    issues.push({sev:'high',title:'Drop/timeout rate at '+pct(drops,total)+' ('+drops+' calls)',detail:'Higher than the 5% acceptable threshold. Check queue depth, agent availability settings, and shift scheduling against call volume.\n\nMost Drops: '+topDrops+'\nMost Timeouts: '+topTimeouts});
   }
 
   // Agent-specific coaching issues
