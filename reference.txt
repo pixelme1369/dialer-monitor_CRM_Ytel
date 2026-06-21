@@ -1,0 +1,230 @@
+REFERENCE SHEET — Ytel Daily Monitor ADP
+=========================================
+
+SECTION 1 — XLSX COLUMNS
+=========================================
+
+call_date
+  - The exact date and time the call was made or received
+  - Format: 2026-06-18 09:33:34
+
+direction
+  - "inbound"  = client called us
+  - "outbound" = we called the client
+
+phone_number / phone_number_dialed
+  - The client's phone number
+  - Used as the unique identifier for a client across all calls
+
+length_in_sec
+  - How long the call lasted in seconds
+  - 0–30s    = dead call
+  - 30–120s  = short call
+  - 120–300s = 2 to 5 minutes
+  - 300s+    = real conversation (>5 min = enrollment opportunity)
+  - 900s+    = strong conversation (>15 min)
+  - 1800s+   = very deep conversation (>30 min)
+
+status (dispo code)
+  - SALE    = agent closed a sale / made a deal
+  - CC      = Current Client (existing enrolled client)
+  - DNC     = Do Not Call — this number must not be dialed
+  - DROP    = call dropped before agent connected
+  - TIMEOT  = call timed out, agent did not pick up
+  - N       = No Answer from client
+  - CLtrns  = Call Transfer (client transferred to another agent)
+  - [ADD YOUR OTHER DISPO CODES]
+
+status_name
+  - Human-readable version of the status code
+  - Example: TIMEOT → "No Answer", SALE → "Sale Made", DNC → "Do Not Call"
+
+full_name
+  - The agent's display name
+  - Used for all per-agent stats and enrollment credit
+
+user
+  - Agent's numeric ID in Ytel
+  - VDCL and VDAD are system/dialer rows — excluded from agent table
+
+campaign_id
+  - Which campaign or queue the call came from
+  - 1000         = main outbound dialer
+  - AGENTDIRECT  = client called agent directly
+  - TransferK    = transfer queue
+  - PLR          = inbound marketing
+  - [ADD YOUR OTHER CAMPAIGN IDs]
+
+source_id
+  - How the call was routed
+  - VDCL        = auto-dialer system drop (not a real agent conversation)
+  - AGENTDIRECT = client called in directly to a specific agent
+  - MANUAL      = agent manually dialed
+
+user_group
+  - The team the agent belongs to
+  - Example: Team_1
+
+CRM Status
+  - The lead's current status in the CRM at time of call
+  - Waiting_For_First_Payment = enrolled but hasn't paid yet
+  - [ADD ALL YOUR CRM STATUSES]
+
+Enrolled Debt
+  - Dollar amount of debt the client enrolled with
+  - Example: $22,455.00
+  - Only meaningful on rows where Cordoba Enrolled Date is populated
+
+Cordoba Enrolled Date
+  - The date the client was officially enrolled in the program
+  - If this matches the analysis date → counts as an enrollment today
+  - Most important column for measuring sales performance
+
+Assigned To
+  - The agent who should receive credit for the enrollment
+  - Overrides the automatic last-call credit logic
+  - If blank → credit goes to the agent with the last call to that phone that day
+
+Last Credit Pulled Date
+  - Date the client's credit was last pulled
+  - NOT the enrollment date — do not confuse with Cordoba Enrolled Date
+
+
+=========================================
+SECTION 2 — DASHBOARD METRICS
+=========================================
+
+Total Calls
+  - Every call row for the day, all dispositions included
+
+Unique Calls
+  - Number of distinct phone numbers contacted
+  - 5 calls to the same number = 1 unique
+
+Short% (Dead ≤30s)
+  - % of calls that lasted 30 seconds or less
+  - No real conversation happened
+  - Above 55% for an agent = coaching flag
+  - High across the board = list quality problem
+
+>2 Min %
+  - % of calls over 2 minutes
+  - KEY metric for Openers — did they keep the client talking?
+  - Green if ≥50%, red if below
+  - Not shown for Closers
+
+>5 Min
+  - Calls over 5 minutes
+  - Minimum for a real sales conversation
+  - Denominator for Conv% calculation
+
+>15 Min / >30 Min / >45 Min
+  - Deep conversations
+  - Counted by UNIQUE phone (best call per phone), not raw calls
+
+Conv% (ENR/>5M)
+  - Enrolled ÷ calls over 5 minutes
+  - Core performance metric for Closers
+  - [ADD: what % is good / what % needs coaching on your team]
+
+Avg Talk
+  - Average call duration = total seconds ÷ total calls
+  - [ADD: healthy avg talk time for Openers vs Closers]
+
+Total Talk
+  - Sum of all call durations for that agent that day
+
+Enrolled
+  - Unique phones credited to that agent as enrollments today
+
+Debt $
+  - Total dollar value of enrollments credited to that agent today
+
+
+=========================================
+SECTION 3 — AGENT ROLES
+=========================================
+
+OPENER
+  - Job: get the client engaged and talking, pass to closer
+  - Key metric: >2 Min %
+  - [ADD: what does a good opener day look like?]
+
+CLOSER
+  - Job: enroll the client
+  - Key metrics: Conv%, Enrolled count, Debt $
+  - [ADD: expected Conv% for a strong closer]
+
+RETENTION
+  - Handles existing enrolled clients
+  - [ADD: what does retention do in your workflow?]
+
+No role tag
+  - Agent is not in Opener, Closer, or Retention lists
+  - [ADD: who are these people and what do they do?]
+
+
+=========================================
+SECTION 4 — ENROLLMENT RULES
+=========================================
+
+1. Phone counts as enrolled only if Cordoba Enrolled Date = analysis date
+2. One enrollment per unique phone number per day
+3. Credit priority:
+   a. "Assigned To" column (if populated)
+   b. Agent with the LAST call to that phone on that day
+4. Debt = Enrolled Debt value from the credited row
+
+
+=========================================
+SECTION 5 — HOURLY BREAKDOWN RULES
+=========================================
+
+Unique #s per hour
+  - Phone counted in the hour of its FIRST call of the day
+  - Called 10 times across the day = still 1 unique, in the first hour
+
+Enrolled per hour
+  - Credited to the hour of the agent's LAST call to that enrolled phone
+  - Example: first call 9am, closes at 10am → unique in 9am, enrolled in 10am
+
+
+=========================================
+SECTION 6 — MISSED CALLBACKS
+=========================================
+
+What it tracks
+  - Inbound TIMEOT = client called us and nobody picked up
+
+Resolved (not flagged) if
+  - ANY call (inbound or outbound) happened AFTER the last timeout
+  - Even if client called back themselves and got through
+
+Flagged only if
+  - Zero follow-up of any kind after the last timeout
+
+Two groups
+  - Enrolled Clients = has Cordoba Enrolled Date (existing client ignored)
+  - Other Calls      = no enrolled date (lead or unknown caller ignored)
+
+
+=========================================
+SECTION 7 — YOUR BUSINESS CONTEXT (FILL IN)
+=========================================
+
+[ ] What CRM statuses exist and what does each one mean?
+[ ] What campaign IDs do you use and what does each represent?
+[ ] What Conv% is good for a closer on your team?
+[ ] What Conv% triggers a coaching conversation?
+[ ] What avg talk time do you expect from openers vs closers?
+[ ] What does a >30 min call mean — always good or sometimes a waste?
+[ ] Do you have a callback SLA for missed TIMEOT calls? (e.g. within 2 hours?)
+[ ] What does CLtrns mean — who transfers to who and why?
+[ ] What does CC status mean — warm re-engagement or something else?
+[ ] Who are the agents with no role tag and what do they do?
+[ ] Any other dispo codes in your data that need definitions?
+
+
+=========================================
+END OF REFERENCE SHEET
+=========================================
