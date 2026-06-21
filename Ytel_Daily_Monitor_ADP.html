@@ -1159,15 +1159,23 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   renderAgentBody(agentRows);
 
   // ── Absent / zero-call agents ──
+  // Build a map of lowercase→actual full_name from the entire uploaded file
   const activeAgentNames=new Set(Object.keys(agentMap).map(n=>n.toLowerCase()));
-  const allKnownAgents=[...new Set([...CLOSERS,...OPENERS,...RETENTION])];
-  const absentAgents=allKnownAgents.filter(n=>!activeAgentNames.has(n));
+  const allFileAgents={};
+  (mergedRaw||[]).forEach(r=>{
+    const n=(r['full_name']||r['user']||'').trim();
+    if(!n||n==='VDCL'||n==='VDAD') return;
+    const lc=n.toLowerCase();
+    if(!allFileAgents[lc]) allFileAgents[lc]=n;
+  });
+  const absentAgents=Object.entries(allFileAgents)
+    .filter(([lc])=>!activeAgentNames.has(lc))
+    .map(([lc,display])=>({lc,display}));
   const absentEl=document.getElementById('absentAgents');
   if(absentAgents.length&&absentEl){
-    const toDisplay=n=>{
-      const tag=RETENTION.has(n)?'<span class="tag-retention">Retention</span>':CLOSERS.has(n)?'':OPENERS.has(n)?'<span class="tag-opener">Opener</span>':'';
-      const proper=n.replace(/\b\w/g,c=>c.toUpperCase());
-      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text-muted);background:var(--gray-100)">${proper}${tag}</span>`;
+    const toDisplay=({lc,display})=>{
+      const tag=RETENTION.has(lc)?'<span class="tag-retention">Retention</span>':OPENERS.has(lc)?'<span class="tag-opener">Opener</span>':'';
+      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text-muted);background:var(--gray-100)">${display}${tag}</span>`;
     };
     absentEl.innerHTML=absentAgents.map(toDisplay).join('');
     document.getElementById('absentCard').style.display='';
