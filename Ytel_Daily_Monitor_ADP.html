@@ -282,6 +282,12 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     </div>
   </div>
 
+  <!-- ABSENT / ZERO-CALL AGENTS -->
+  <div class="card" id="absentCard" style="display:none">
+    <div class="card-title" style="color:var(--text-muted)">Absent / Zero Calls Today</div>
+    <div id="absentAgents" style="display:flex;flex-wrap:wrap;gap:8px;padding-top:4px"></div>
+  </div>
+
   <!-- AGENT FUNNEL RATIO TABLE -->
   <div class="card">
     <div class="card-title">Agent call funnel — % of total calls <span class="card-title-sub">Each % = bucket count ÷ agent's total calls. <2min = calls lost under 2 min. >2/>5/>10/>15/>30 = cumulative calls that reached that duration. Click column to sort.</span></div>
@@ -1151,6 +1157,23 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     </tr>`;
   }
   renderAgentBody(agentRows);
+
+  // ── Absent / zero-call agents ──
+  const activeAgentNames=new Set(Object.keys(agentMap).map(n=>n.toLowerCase()));
+  const allKnownAgents=[...new Set([...CLOSERS,...OPENERS,...RETENTION])];
+  const absentAgents=allKnownAgents.filter(n=>!activeAgentNames.has(n));
+  const absentEl=document.getElementById('absentAgents');
+  if(absentAgents.length&&absentEl){
+    const toDisplay=n=>{
+      const tag=RETENTION.has(n)?'<span class="tag-retention">Retention</span>':CLOSERS.has(n)?'':OPENERS.has(n)?'<span class="tag-opener">Opener</span>':'';
+      const proper=n.replace(/\b\w/g,c=>c.toUpperCase());
+      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text-muted);background:var(--gray-100)">${proper}${tag}</span>`;
+    };
+    absentEl.innerHTML=absentAgents.map(toDisplay).join('');
+    document.getElementById('absentCard').style.display='';
+  } else if(absentEl){
+    document.getElementById('absentCard').style.display='none';
+  }
 
   // ── Agent funnel ratio table ──
   const fcell=(n,d,color)=>{
