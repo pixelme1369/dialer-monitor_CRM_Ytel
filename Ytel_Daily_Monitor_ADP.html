@@ -342,7 +342,8 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
             <th data-col="9">Drops</th>
             <th data-col="10">Avg Talk</th>
             <th data-col="11">Enrolled</th>
-            <th data-col="12">Conv% (enr/>5m)</th>
+            <th data-col="12">Conv% (enr/total >2m)</th>
+            <th data-col="13">Conv% (enr/unique >2m)</th>
           </tr>
         </thead>
         <tbody id="campBody"></tbody>
@@ -1258,11 +1259,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const campDirMap={inbound:{},outbound:{}}; // direction-filtered camp stats
   const campAgentMap={};
   calls.forEach(r=>{
-    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
+    const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set()};
     const d=campMap[c]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
     if(r._sec<120) d.lt2m++;
-    if(r._sec>=120) d.gt2m++;
+    if(r._sec>=120){ d.gt2m++; if(r._phone) d.phonesGt2m.add(r._phone); }
     if(r._sec>=300) d.gt5m++;
     if(r._sec>=600) d.gt10m++;
     if(r._sec>=900) d.gt15m++;
@@ -1271,11 +1272,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._enrolled) d.enroll++;
     // direction breakdown
     const dir=r._dir==='inbound'?'inbound':'outbound';
-    if(!campDirMap[dir][c]) campDirMap[dir][c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0};
+    if(!campDirMap[dir][c]) campDirMap[dir][c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set()};
     const dd=campDirMap[dir][c]; dd.calls++; dd.sec+=r._sec;
     if(r._sec<=30) dd.short++;
     if(r._sec<120) dd.lt2m++;
-    if(r._sec>=120) dd.gt2m++;
+    if(r._sec>=120){ dd.gt2m++; if(r._phone) dd.phonesGt2m.add(r._phone); }
     if(r._sec>=300) dd.gt5m++;
     if(r._sec>=600) dd.gt10m++;
     if(r._sec>=900) dd.gt15m++;
@@ -1336,7 +1337,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       <td>${d.drops>0?'<span style="color:var(--red);font-weight:600">'+d.drops+'</span>':'—'}</td>
       <td>${fmtDur(d.calls?Math.round(d.sec/d.calls):0)}</td>
       <td class="${d.enroll>0?'enroll-num':'enroll-zero'}">${d.enroll||'—'}</td>
-      <td>${d.gt5m>0&&d.enroll>0?pct(d.enroll,d.gt5m):'—'}</td>
+      <td>${d.gt2m>0&&d.enroll>0?pct(d.enroll,d.gt2m):'—'}</td>
+      <td>${d.phonesGt2m.size>0&&d.enroll>0?pct(d.enroll,d.phonesGt2m.size):'—'}</td>
     </tr>${agentSubRows}`;
   }).join('');
 
@@ -1360,7 +1362,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     <td>${cTot.drops>0?'<span style="color:var(--red);font-weight:600">'+cTot.drops+'</span>':'—'}</td>
     <td>${fmtDur(cTot.calls?Math.round(cTot.sec/cTot.calls):0)}</td>
     <td class="${cTot.enroll>0?'enroll-num':'enroll-zero'}">${cTot.enroll||'—'}</td>
-    <td>${cTot.gt5m>0&&cTot.enroll>0?pct(cTot.enroll,cTot.gt5m):'—'}</td>
+    <td>${cTot.gt2m>0&&cTot.enroll>0?pct(cTot.enroll,cTot.gt2m):'—'}</td>
+    <td>—</td>
   </tr>`;
   }; // end renderCampBody
 
