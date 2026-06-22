@@ -1197,8 +1197,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     const tbody=document.getElementById('agentBody');
     let sortCol=-1,sortDir=1;
     function cellVal(td){
-      const n=parseFloat(td.textContent.replace(/[^0-9.\-]/g,''));
-      return isNaN(n)?td.textContent.trim().toLowerCase():n;
+      const txt=td.textContent.trim();
+      if(txt==='—'||txt==='') return -Infinity;
+      const n=parseFloat(txt.replace(/[^0-9.\-]/g,''));
+      return isNaN(n)?txt.toLowerCase():n;
     }
     thead.querySelectorAll('th[data-col]').forEach(th=>{
       th.addEventListener('click',()=>{
