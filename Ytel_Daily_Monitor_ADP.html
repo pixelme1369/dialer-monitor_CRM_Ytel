@@ -252,6 +252,11 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
         <select id="af-camp" onchange="filterAgents()" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
           <option value="">All Campaigns</option>
         </select>
+        <select id="af-dir" onchange="filterAgents()" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Directions</option>
+          <option value="inbound">Inbound</option>
+          <option value="outbound">Outbound</option>
+        </select>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -470,13 +475,12 @@ function filterAgents(type){
     document.getElementById('af-'+type).classList.add('af-active');
   }
   const campFilter=(document.getElementById('af-camp')?.value||'');
+  const dirFilter=(document.getElementById('af-dir')?.value||'');
   const tbody=document.getElementById('agentBody');
   if(!tbody) return;
 
-  // If a specific campaign is selected, re-render with campaign stats
-  if(campFilter && window._agentCampDataMap){
-    const campAgents=window._agentCampDataMap[campFilter]||{};
-    let rows=Object.entries(campAgents).map(([name,d])=>{
+  function buildRowsFromMap(agentDataMap){
+    return Object.entries(agentDataMap).map(([name,d])=>{
       const uniqueCalls=d.phones.size;
       const credit=window._agentEnrollCredit?.[name.toLowerCase()]||{count:0,debt:0};
       let inboundUniq=0,outboundUniq=0;
@@ -484,19 +488,34 @@ function filterAgents(type){
         const fd=(window._agentPhoneFirstDir||{})[name+'||'+phone];
         if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
       });
-      return {...d,name,uniqueCalls,enr:d.enr,debt:d.debt,inboundUniq,outboundUniq,
+      return {...d,name,uniqueCalls,enr:d.enr||credit.count,debt:d.debt||credit.debt,inboundUniq,outboundUniq,
         avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
-    // apply role filter
+  }
+
+  // Campaign filter takes priority — intersect with direction if also selected
+  if(campFilter && window._agentCampDataMap){
+    let sourceMap=window._agentCampDataMap[campFilter]||{};
+    let rows=buildRowsFromMap(sourceMap);
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
-    document.getElementById('agentCount').textContent=rows.length+' agents ('+campFilter+')';
-    // re-render using existing render function
+    const label=campFilter+(dirFilter?' · '+dirFilter:'');
+    document.getElementById('agentCount').textContent=rows.length+' agents ('+label+')';
     window.renderAgentBody(rows);
     return;
   }
 
-  // All campaigns: restore full data then hide/show by role
+  // Direction-only filter
+  if(dirFilter && window._agentDirMap){
+    let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{});
+    if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
+    if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
+    document.getElementById('agentCount').textContent=rows.length+' agents ('+dirFilter+')';
+    window.renderAgentBody(rows);
+    return;
+  }
+
+  // No filters: full data
   if(window._agentAllRows){
     let rows=window._agentAllRows;
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
@@ -971,6 +990,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   });
 
   const agentMap={};
+  const agentDirMap={inbound:{},outbound:{}};
   const agentHourMap={};
   const agentCampsMap={};
   const agentCampDataMap={}; // {camp: {agentName: stats}}
@@ -985,6 +1005,18 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._sec>=900) d.gt15m++;
     if(r._sec>=1800) d.gt30m++;
     if(r._phone) d.phones.add(r._phone);
+    // direction breakdown
+    const dkey=r._dir==='inbound'?'inbound':'outbound';
+    if(!agentDirMap[dkey][r._name]) agentDirMap[dkey][r._name]={calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,phones:new Set(),enr:0,debt:0};
+    const dd=agentDirMap[dkey][r._name]; dd.calls++; dd.sec+=r._sec;
+    if(r._sec<=30) dd.short++;
+    if(r._sec<120) dd.lt2m++;
+    if(r._sec>=120) dd.gt2m++;
+    if(r._sec>=300) dd.gt5m++;
+    if(r._sec>=600) dd.gt10m++;
+    if(r._sec>=900) dd.gt15m++;
+    if(r._sec>=1800) dd.gt30m++;
+    if(r._phone) dd.phones.add(r._phone);
     if(r._campaign){
       if(!agentCampsMap[r._name]) agentCampsMap[r._name]=new Set();
       agentCampsMap[r._name].add(r._campaign);
@@ -1055,9 +1087,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       return {...d,name,uniqueCalls,enr,debt,inboundUniq,outboundUniq,avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
 
-  // Store globally for re-render on campaign filter
+  // Store globally for re-render on campaign/direction filter
   window._agentAllRows=agentRows;
   window._agentCampDataMap=agentCampDataMap;
+  window._agentDirMap=agentDirMap;
   window._agentEnrollCredit=agentEnrollCredit;
   window._agentEnrollPhones=agentEnrollPhones;
   window._agentPhoneFirstDir=agentPhoneFirstDir;
