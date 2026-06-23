@@ -561,15 +561,19 @@ function filterAgents(type){
   const tbody=document.getElementById('agentBody');
   if(!tbody) return;
 
-  function buildRowsFromMap(agentDataMap){
+  function buildRowsFromMap(agentDataMap, forcedDir){
     return Object.entries(agentDataMap).map(([name,d])=>{
       const uniqueCalls=d.phones.size;
       const credit=window._agentEnrollCredit?.[name.toLowerCase()]||{count:0,debt:0};
       let inboundUniq=0,outboundUniq=0;
-      d.phones.forEach(phone=>{
-        const fd=(window._agentPhoneFirstDir||{})[name+'||'+phone];
-        if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
-      });
+      if(forcedDir==='inbound'){ inboundUniq=uniqueCalls; }
+      else if(forcedDir==='outbound'){ outboundUniq=uniqueCalls; }
+      else {
+        d.phones.forEach(phone=>{
+          const fd=(window._agentPhoneFirstDir||{})[name+'||'+phone];
+          if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
+        });
+      }
       return {...d,name,uniqueCalls,enr:d.enr||credit.count,debt:d.debt||credit.debt,inboundUniq,outboundUniq,
         avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
@@ -589,7 +593,7 @@ function filterAgents(type){
 
   // Direction-only filter
   if(dirFilter && window._agentDirMap){
-    let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{});
+    let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{}, dirFilter);
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
     document.getElementById('agentCount').textContent=rows.length+' agents ('+dirFilter+')';
@@ -647,8 +651,8 @@ function filterCampTable(role){
   const campName=document.getElementById('campNameFilter')?.value||'';
   // If no filters, use prebuilt maps
   if(_campRoleFilter==='all' && !dir && !campName){ window.renderCampBody(window._campMap||{}); return; }
-  if(_campRoleFilter==='all' && dir && !campName){ window.renderCampBody((window._campDirMap||{})[dir]||{}); return; }
-  // Rebuild campMap from raw calls with active filters
+  if(_campRoleFilter==='all' && dir && !campName){ window.renderCampBody((window._campDirMap||{})[dir]||{},(window._campAgentDirMap||{})[dir]||{}); return; }
+  // Rebuild campMap + campAgentMap from raw calls with active filters
   const filtered=window._campCalls.filter(r=>{
     if(campName && r._campaign!==campName) return false;
     if(dir && r._dir!==dir) return false;
@@ -658,6 +662,7 @@ function filterCampTable(role){
     return true;
   });
   const map={};
+  const agMap={};
   filtered.forEach(r=>{
     const c=r._campaign;
     if(!map[c]) map[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set(),enrolledPhones:new Set()};
@@ -672,8 +677,22 @@ function filterCampTable(role){
     else if(r._sec>=1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
     if(r._enrolled){ d.enroll++; if(r._phone) d.enrolledPhones.add(r._phone); }
+    // per-agent sub-row
+    const ag=r._name||'Unknown';
+    if(!agMap[c]) agMap[c]={};
+    if(!agMap[c][ag]) agMap[c][ag]={calls:0,short:0,sec:0,lt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,drops:0,enroll:0,enrolledPhones:new Set()};
+    const da=agMap[c][ag]; da.calls++; da.sec+=r._sec;
+    if(r._sec<=30) da.short++;
+    if(r._sec<120) da.lt2m++;
+    if(r._sec>=300&&r._sec<600) da.r5to10++;
+    else if(r._sec>=600&&r._sec<900) da.r10to15++;
+    else if(r._sec>=900&&r._sec<1200) da.r15to20++;
+    else if(r._sec>=1200&&r._sec<1800) da.r20to30++;
+    else if(r._sec>=1800) da.gt30m++;
+    if(['DROP','TIMEOT'].includes(r._status)) da.drops++;
+    if(r._enrolled){ da.enroll++; if(r._phone) da.enrolledPhones.add(r._phone); }
   });
-  window.renderCampBody(map);
+  window.renderCampBody(map, agMap);
 }
 function filterCampDir(){ filterCampTable(); }
 function filterOpenerTable(){ renderOpenerTable(); }
@@ -1568,6 +1587,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const campMap={};
   const campDirMap={inbound:{},outbound:{}}; // direction-filtered camp stats
   const campAgentMap={};
+  const campAgentDirMap={inbound:{},outbound:{}};
   calls.forEach(r=>{
     const c=r._campaign; if(!campMap[c]) campMap[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set(),enrolledPhones:new Set()};
     const d=campMap[c]; d.calls++; d.sec+=r._sec;
@@ -1595,20 +1615,27 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     else if(r._sec>=1800) dd.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) dd.drops++;
     if(r._enrolled){ dd.enroll++; if(r._phone) dd.enrolledPhones.add(r._phone); }
-    // per-campaign per-agent
+    // per-campaign per-agent (all directions + per direction)
     if(!campAgentMap[c]) campAgentMap[c]={};
     const ag=r._name||'Unknown';
-    if(!campAgentMap[c][ag]) campAgentMap[c][ag]={calls:0,short:0,sec:0,lt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,drops:0,enroll:0,enrolledPhones:new Set()};
-    const da=campAgentMap[c][ag]; da.calls++; da.sec+=r._sec;
-    if(r._sec<=30) da.short++;
-    if(r._sec<120) da.lt2m++;
-    if(r._sec>=300&&r._sec<600) da.r5to10++;
-    else if(r._sec>=600&&r._sec<900) da.r10to15++;
-    else if(r._sec>=900&&r._sec<1200) da.r15to20++;
-    else if(r._sec>=1200&&r._sec<1800) da.r20to30++;
-    else if(r._sec>=1800) da.gt30m++;
-    if(['DROP','TIMEOT'].includes(r._status)) da.drops++;
-    if(r._enrolled){ da.enroll++; if(r._phone) da.enrolledPhones.add(r._phone); }
+    const addAgEntry=(m,camp,agent)=>{
+      if(!m[camp]) m[camp]={};
+      if(!m[camp][agent]) m[camp][agent]={calls:0,short:0,sec:0,lt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,drops:0,enroll:0,enrolledPhones:new Set()};
+      return m[camp][agent];
+    };
+    const da=addAgEntry(campAgentMap,c,ag); da.calls++; da.sec+=r._sec;
+    const dda=addAgEntry(campAgentDirMap[dir],c,ag); dda.calls++; dda.sec+=r._sec;
+    [da,dda].forEach(x=>{
+      if(r._sec<=30) x.short++;
+      if(r._sec<120) x.lt2m++;
+      if(r._sec>=300&&r._sec<600) x.r5to10++;
+      else if(r._sec>=600&&r._sec<900) x.r10to15++;
+      else if(r._sec>=900&&r._sec<1200) x.r15to20++;
+      else if(r._sec>=1200&&r._sec<1800) x.r20to30++;
+      else if(r._sec>=1800) x.gt30m++;
+      if(['DROP','TIMEOT'].includes(r._status)) x.drops++;
+      if(r._enrolled){ x.enroll++; if(r._phone) x.enrolledPhones.add(r._phone); }
+    });
   });
 
   // ── Openers transfer breakdown ──
@@ -1622,14 +1649,16 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   window._campMap=campMap;
   window._campDirMap=campDirMap;
   window._campCalls=calls;
+  window._campAgentDirMap=campAgentDirMap;
 
   const typeOrder={Marketing:0,Manual:1,Other:2,VDCL:3};
-  window.renderCampBody=function(sourceMap){
+  window.renderCampBody=function(sourceMap, agentMapSrc){
+  const agMapSrc=agentMapSrc||campAgentMap;
   const campRows=Object.entries(sourceMap).sort((a,b)=>(typeOrder[a[1].type]||9)-(typeOrder[b[1].type]||9)||b[1].calls-a[1].calls);
   const typeTag={Marketing:'<span class="tag mkt">Marketing</span>',Manual:'<span class="tag man">Manual</span>',VDCL:'<span class="tag vdcl">VDCL</span>',Other:'<span class="tag oth">Other</span>'};
   document.getElementById('campBody').innerHTML=campRows.map(([camp,d],i)=>{
     const rowId='camp-ag-'+i;
-    let agentRows=Object.entries(campAgentMap[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
+    let agentRows=Object.entries(agMapSrc[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
     if(_campRoleFilter==='closer') agentRows=agentRows.filter(([ag])=>CLOSERS.has(ag.toLowerCase()));
     else if(_campRoleFilter==='opener') agentRows=agentRows.filter(([ag])=>OPENERS.has(ag.toLowerCase()));
     const agentSubRows=agentRows.map(([ag,a])=>`
