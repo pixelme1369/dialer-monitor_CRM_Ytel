@@ -1374,13 +1374,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     const maxC=rows[0]?rows[0].calls:1;
     const enrollPhones=window._agentEnrollPhones||agentEnrollPhones;
     document.getElementById('agentBody').innerHTML=rows.map((a,i)=>{
-      const convPct=a.gt2m>0&&a.enr>0?pct(a.enr,a.gt2m):'—';
+      const convPct=a.calls>0&&a.enr>0?pct(a.enr,a.calls):'—';
       const shortCls=a.shortPct>55?'bad':'';
       const isOpener=OPENERS.has(a.name.toLowerCase());
-      const gt2mPct=a.calls>0?a.gt2m/a.calls*100:0;
-      const gt2mCell=isOpener
-        ? `${a.gt2m}<div style="font-size:9px;font-weight:700;color:${gt2mPct>=50?'var(--green-dk)':'var(--red)'};margin-top:1px">${gt2mPct.toFixed(0)}%</div>`
-        : funnelCell(a.gt2m,0,null);
       const rowId='agent-hr-'+i;
       const hours=agentHourMap[a.name]||{};
       const hourKeys=Object.keys(hours).sort();
@@ -1417,7 +1413,6 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         <td style="color:var(--text-muted)">${a.outboundUniq}</td>
         <td><div class="bar-mini"><div class="bar-bg"><div class="bar-fg ${shortCls}" style="width:${a.shortPct.toFixed(0)}%"></div></div>${a.shortPct.toFixed(0)}%</div></td>
         <td>${funnelCell(a.lt2m,a.calls,"var(--red)")}</td>
-        <td>${gt2mCell}</td>
         <td>${funnelCell(a.r5to10,a.calls,"var(--text-muted)")}</td>
         <td>${funnelCell(a.r10to15,a.calls,"var(--text-muted)")}</td>
         <td>${funnelCell(a.r15to20,a.calls,"var(--text-muted)")}</td>
@@ -1444,7 +1439,6 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       <td>${agTot.calls}</td><td>${agTot.uniqueCalls}</td><td>—</td><td>—</td>
       <td>${agTotShortPct.toFixed(0)}%</td>
       <td>${funnelCell(agTot.lt2m,agTot.calls,"var(--red)")}</td>
-      <td>${funnelCell(agTot.gt2m,agTot.calls,"var(--text-muted)")}</td>
       <td>${funnelCell(agTot.r5to10,agTot.calls,"var(--text-muted)")}</td>
       <td>${funnelCell(agTot.r10to15,agTot.calls,"var(--text-muted)")}</td>
       <td>${funnelCell(agTot.r15to20,agTot.calls,"var(--text-muted)")}</td>
@@ -1683,7 +1677,6 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     <td>${cTot.calls}</td>
     <td>${cTot.short} <span style="color:var(--text-muted);font-size:11px">${pct(cTot.short,cTot.calls)}</span></td>
     <td>${funnelCell(cTot.lt2m,cTot.calls,"var(--red)")}</td>
-    <td>${funnelCell(cTot.gt2m,cTot.calls,"var(--text-muted)")}</td>
     <td>${funnelCell(cTot.r5to10,cTot.calls,"var(--text-muted)")}</td>
     <td>${funnelCell(cTot.r10to15,cTot.calls,"var(--text-muted)")}</td>
     <td>${funnelCell(cTot.r15to20,cTot.calls,"var(--text-muted)")}</td>
