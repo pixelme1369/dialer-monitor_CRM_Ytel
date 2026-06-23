@@ -456,15 +456,27 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
 
   <!-- OPENERS TRANSFER BREAKDOWN -->
   <div class="card" id="openerTransferCard" style="display:none">
-    <div class="card-title">Openers — Transfer Breakdown by Campaign
-      <span class="card-title-sub">CLtrns = successful transfer to closer</span>
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <span>Openers — Transfer Breakdown by Campaign
+        <span class="card-title-sub">CLtrns = successful transfer to closer · click agent to expand</span>
+      </span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <select id="otCampFilter" onchange="filterOpenerTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Campaigns</option>
+        </select>
+        <select id="otDirFilter" onchange="filterOpenerTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Directions</option>
+          <option value="inbound">Inbound</option>
+          <option value="outbound">Outbound</option>
+        </select>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table id="openerTransferTable">
         <thead>
           <tr>
             <th style="text-align:left">Agent</th>
-            <th>Campaign</th>
+            <th style="text-align:left">Campaign</th>
             <th>Calls (total)</th>
             <th>Dead ≤30s</th>
             <th>&lt;2 min</th>
@@ -664,6 +676,101 @@ function filterCampTable(role){
   window.renderCampBody(map);
 }
 function filterCampDir(){ filterCampTable(); }
+function filterOpenerTable(){ renderOpenerTable(); }
+function renderOpenerTable(){
+  const calls=window._openerCalls||[];
+  if(!calls.length) return;
+  const campF=document.getElementById('otCampFilter')?.value||'';
+  const dirF=document.getElementById('otDirFilter')?.value||'';
+  const filtered=calls.filter(r=>{
+    if(campF && r._campaign!==campF) return false;
+    if(dirF && r._dir!==dirF) return false;
+    return true;
+  });
+  // Build {agent: {camp: stats}}
+  const emptyS=()=>({calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,
+    enrolledPhones:new Set(),cltrns:{lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0}});
+  const agCampMap={};
+  filtered.forEach(r=>{
+    const ag=r._name||'Unknown'; const c=r._campaign;
+    if(!agCampMap[ag]) agCampMap[ag]={};
+    if(!agCampMap[ag][c]) agCampMap[ag][c]=emptyS();
+    const s=agCampMap[ag][c];
+    s.calls++; s.sec+=r._sec;
+    if(r._sec<=30) s.short++;
+    const isCL=r._status==='CLtrns';
+    if(r._sec<120){ s.lt2m++; if(isCL) s.cltrns.lt2m++; }
+    if(r._sec>=120){ s.gt2m++; if(isCL) s.cltrns.gt2m++; }
+    if(r._sec>=300){ s.gt5m++; if(isCL) s.cltrns.gt5m++; }
+    if(r._sec>=600){ s.gt10m++; if(isCL) s.cltrns.gt10m++; }
+    if(r._sec>=900){ s.gt15m++; if(isCL) s.cltrns.gt15m++; }
+    if(r._sec>=1800){ s.gt30m++; if(isCL) s.cltrns.gt30m++; }
+    if(['DROP','TIMEOT'].includes(r._status)) s.drops++;
+    if(r._enrolled){ s.enroll++; if(r._phone) s.enrolledPhones.add(r._phone); }
+  });
+  const clCell=(val,cl)=>{
+    const pctStr=cl>0?`<div style="font-size:9px;color:var(--blue);font-weight:600;margin-top:1px">${cl} CLtrns</div>`:'';
+    return val+pctStr;
+  };
+  const sumTot=entries=>entries.reduce((t,[,s])=>({
+    calls:t.calls+s.calls,short:t.short+s.short,sec:t.sec+s.sec,
+    lt2m:t.lt2m+s.lt2m,gt2m:t.gt2m+s.gt2m,gt5m:t.gt5m+s.gt5m,
+    gt10m:t.gt10m+s.gt10m,gt15m:t.gt15m+s.gt15m,gt30m:t.gt30m+s.gt30m,
+    drops:t.drops+s.drops,enroll:t.enroll+s.enroll,
+    cltrns:{lt2m:t.cltrns.lt2m+s.cltrns.lt2m,gt2m:t.cltrns.gt2m+s.cltrns.gt2m,
+      gt5m:t.cltrns.gt5m+s.cltrns.gt5m,gt10m:t.cltrns.gt10m+s.cltrns.gt10m,
+      gt15m:t.cltrns.gt15m+s.cltrns.gt15m,gt30m:t.cltrns.gt30m+s.cltrns.gt30m},
+    enrolledPhones:new Set([...t.enrolledPhones,...s.enrolledPhones])
+  }),{calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,
+    cltrns:{lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0},enrolledPhones:new Set()});
+  const agEntries=Object.entries(agCampMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  const rows=agEntries.map(([ag,camps],idx)=>{
+    const campEntries=Object.entries(camps).sort((a,b)=>b[1].calls-a[1].calls);
+    const tot=sumTot(campEntries);
+    const agId='ot-ag-'+idx;
+    const enrollCell=(s,lbl)=>s.enroll>0
+      ?`<span class="enroll-click" onclick='event.stopPropagation();showEnrolledPhones(${JSON.stringify([...s.enrolledPhones])},${JSON.stringify(lbl)})'>${s.enroll}</span>`:'—';
+    const agRow=`<tr id="${agId}" class="ot-agent-row" style="font-weight:700;background:var(--gray-100);cursor:pointer" onclick="toggleOpenerAgent('${agId}')">
+      <td style="text-align:left"><span class="agent-toggle" id="tog-${agId}">▶</span> ${ag} <span class="tag-opener">Opener</span></td>
+      <td style="color:var(--text-muted);font-size:11px;text-align:left">${campEntries.length} campaign${campEntries.length>1?'s':''}</td>
+      <td>${tot.calls}</td>
+      <td>${tot.short} <span style="color:var(--text-muted);font-size:11px">${pct(tot.short,tot.calls)}</span></td>
+      <td>${funnelCell(tot.lt2m,tot.calls,'var(--red)')}</td>
+      <td>${clCell(tot.gt2m,tot.cltrns.gt2m)}</td>
+      <td>${clCell(tot.gt5m,tot.cltrns.gt5m)}</td>
+      <td>${clCell(tot.gt10m,tot.cltrns.gt10m)}</td>
+      <td>${clCell(tot.gt15m,tot.cltrns.gt15m)}</td>
+      <td>${clCell(tot.gt30m,tot.cltrns.gt30m)}</td>
+      <td>${tot.drops>0?'<span style="color:var(--red);font-weight:600">'+tot.drops+'</span>':'—'}</td>
+      <td>${fmtDur(tot.calls?Math.round(tot.sec/tot.calls):0)}</td>
+      <td class="${tot.enroll>0?'enroll-num':'enroll-zero'}">${enrollCell(tot,ag)}</td>
+    </tr>`;
+    const subRows=campEntries.map(([camp,s])=>`<tr class="ot-sub-row" data-parent="${agId}" style="display:none">
+      <td style="text-align:left;padding-left:28px;color:var(--text-muted);font-size:11px">↳ ${ag}</td>
+      <td style="text-align:left;font-size:12px;font-weight:600">${camp}</td>
+      <td>${s.calls}</td>
+      <td>${s.short} <span style="color:var(--text-muted);font-size:11px">${pct(s.short,s.calls)}</span></td>
+      <td>${funnelCell(s.lt2m,s.calls,'var(--red)')}</td>
+      <td>${clCell(s.gt2m,s.cltrns.gt2m)}</td>
+      <td>${clCell(s.gt5m,s.cltrns.gt5m)}</td>
+      <td>${clCell(s.gt10m,s.cltrns.gt10m)}</td>
+      <td>${clCell(s.gt15m,s.cltrns.gt15m)}</td>
+      <td>${clCell(s.gt30m,s.cltrns.gt30m)}</td>
+      <td>${s.drops>0?'<span style="color:var(--red);font-weight:600">'+s.drops+'</span>':'—'}</td>
+      <td>${fmtDur(s.calls?Math.round(s.sec/s.calls):0)}</td>
+      <td class="${s.enroll>0?'enroll-num':'enroll-zero'}">${enrollCell(s,ag+' · '+camp)}</td>
+    </tr>`).join('');
+    return agRow+subRows;
+  }).join('');
+  document.getElementById('openerTransferBody').innerHTML=rows;
+}
+function toggleOpenerAgent(agId){
+  const subs=document.querySelectorAll('.ot-sub-row[data-parent="'+agId+'"]');
+  const tog=document.getElementById('tog-'+agId);
+  const open=subs.length&&subs[0].style.display==='none';
+  subs.forEach(r=>r.style.display=open?'':'none');
+  if(tog) tog.textContent=open?'▼':'▶';
+}
 function toggleAgentHours(rowId){
   const rows=document.querySelectorAll('[data-parent="'+rowId+'"]');
   const tog=document.getElementById('tog-'+rowId);
@@ -1486,91 +1593,12 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   });
 
   // ── Openers transfer breakdown ──
-  // {agent: {camp: stats}} where stats include CLtrns counts per bucket
-  const openerAgentCampMap={};
-  const emptyOpenerStat=()=>({calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,enrolledPhones:new Set(),
-    cltrns:{lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,total:0}});
-  calls.forEach(r=>{
-    const n=(r._name||'').toLowerCase();
-    if(!OPENERS.has(n)) return;
-    const ag=r._name||'Unknown';
-    const c=r._campaign;
-    if(!openerAgentCampMap[ag]) openerAgentCampMap[ag]={};
-    if(!openerAgentCampMap[ag][c]) openerAgentCampMap[ag][c]=emptyOpenerStat();
-    const s=openerAgentCampMap[ag][c];
-    s.calls++; s.sec+=r._sec;
-    if(r._sec<=30) s.short++;
-    const isCL=r._status==='CLtrns';
-    if(r._sec<120){ s.lt2m++; if(isCL) s.cltrns.lt2m++; }
-    if(r._sec>=120){ s.gt2m++; if(isCL) s.cltrns.gt2m++; }
-    if(r._sec>=300){ s.gt5m++; if(isCL) s.cltrns.gt5m++; }
-    if(r._sec>=600){ s.gt10m++; if(isCL) s.cltrns.gt10m++; }
-    if(r._sec>=900){ s.gt15m++; if(isCL) s.cltrns.gt15m++; }
-    if(r._sec>=1800){ s.gt30m++; if(isCL) s.cltrns.gt30m++; }
-    if(isCL) s.cltrns.total++;
-    if(['DROP','TIMEOT'].includes(r._status)) s.drops++;
-    if(r._enrolled){ s.enroll++; if(r._phone) s.enrolledPhones.add(r._phone); }
-  });
-
-  // Render opener transfer table
-  const otCard=document.getElementById('openerTransferCard');
-  const otBody=document.getElementById('openerTransferBody');
-  const openerEntries=Object.entries(openerAgentCampMap).sort((a,b)=>a[0].localeCompare(b[0]));
-  if(openerEntries.length){
-    otCard.style.display='';
-    const clCell=(val,tot)=>val>0
-      ?`${val}<div style="font-size:9px;color:var(--blue);font-weight:600;margin-top:1px">${val} CLtrns</div>`
-      :`${val}`;
-    otBody.innerHTML=openerEntries.map(([ag,camps])=>{
-      const campEntries=Object.entries(camps).sort((a,b)=>b[1].calls-a[1].calls);
-      // Agent totals
-      const tot=campEntries.reduce((t,[,s])=>({
-        calls:t.calls+s.calls,short:t.short+s.short,sec:t.sec+s.sec,
-        lt2m:t.lt2m+s.lt2m,gt2m:t.gt2m+s.gt2m,gt5m:t.gt5m+s.gt5m,
-        gt10m:t.gt10m+s.gt10m,gt15m:t.gt15m+s.gt15m,gt30m:t.gt30m+s.gt30m,
-        drops:t.drops+s.drops,enroll:t.enroll+s.enroll,
-        cltrns:{lt2m:t.cltrns.lt2m+s.cltrns.lt2m,gt2m:t.cltrns.gt2m+s.cltrns.gt2m,
-          gt5m:t.cltrns.gt5m+s.cltrns.gt5m,gt10m:t.cltrns.gt10m+s.cltrns.gt10m,
-          gt15m:t.cltrns.gt15m+s.cltrns.gt15m,gt30m:t.cltrns.gt30m+s.cltrns.gt30m,total:t.cltrns.total+s.cltrns.total},
-        enrolledPhones:new Set([...t.enrolledPhones,...s.enrolledPhones])
-      }),{calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,
-        cltrns:{lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,total:0},enrolledPhones:new Set()});
-      const agRow=`<tr style="font-weight:700;background:var(--gray-100);cursor:pointer" onclick="this.nextElementSibling&&(this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none')">
-        <td style="text-align:left">${ag} <span class="tag-opener">Opener</span></td>
-        <td style="color:var(--text-muted);font-size:11px">${campEntries.length} campaign${campEntries.length>1?'s':''}</td>
-        <td>${tot.calls}</td>
-        <td>${tot.short} <span style="color:var(--text-muted);font-size:11px">${pct(tot.short,tot.calls)}</span></td>
-        <td>${funnelCell(tot.lt2m,tot.calls,'var(--red)')}</td>
-        <td>${clCell(tot.gt2m,tot.cltrns.gt2m)}</td>
-        <td>${clCell(tot.gt5m,tot.cltrns.gt5m)}</td>
-        <td>${clCell(tot.gt10m,tot.cltrns.gt10m)}</td>
-        <td>${clCell(tot.gt15m,tot.cltrns.gt15m)}</td>
-        <td>${clCell(tot.gt30m,tot.cltrns.gt30m)}</td>
-        <td>${tot.drops>0?'<span style="color:var(--red);font-weight:600">'+tot.drops+'</span>':'—'}</td>
-        <td>${fmtDur(tot.calls?Math.round(tot.sec/tot.calls):0)}</td>
-        <td class="${tot.enroll>0?'enroll-num':'enroll-zero'}">${tot.enroll>0?`<span class="enroll-click" onclick='event.stopPropagation();showEnrolledPhones(${JSON.stringify([...tot.enrolledPhones])},${JSON.stringify(ag)})'>${tot.enroll}</span>`:'—'}</td>
-      </tr>`;
-      const campSubRows=`<tbody class="opener-camp-rows">${campEntries.map(([camp,s])=>`
-        <tr style="background:var(--white)">
-          <td style="text-align:left;padding-left:20px;color:var(--text-muted);font-size:11px">↳ ${ag}</td>
-          <td style="font-size:12px;font-weight:600">${camp}</td>
-          <td>${s.calls}</td>
-          <td>${s.short} <span style="color:var(--text-muted);font-size:11px">${pct(s.short,s.calls)}</span></td>
-          <td>${funnelCell(s.lt2m,s.calls,'var(--red)')}</td>
-          <td>${clCell(s.gt2m,s.cltrns.gt2m)}</td>
-          <td>${clCell(s.gt5m,s.cltrns.gt5m)}</td>
-          <td>${clCell(s.gt10m,s.cltrns.gt10m)}</td>
-          <td>${clCell(s.gt15m,s.cltrns.gt15m)}</td>
-          <td>${clCell(s.gt30m,s.cltrns.gt30m)}</td>
-          <td>${s.drops>0?'<span style="color:var(--red);font-weight:600">'+s.drops+'</span>':'—'}</td>
-          <td>${fmtDur(s.calls?Math.round(s.sec/s.calls):0)}</td>
-          <td class="${s.enroll>0?'enroll-num':'enroll-zero'}">${s.enroll>0?`<span class="enroll-click" onclick='event.stopPropagation();showEnrolledPhones(${JSON.stringify([...s.enrolledPhones])},${JSON.stringify(ag+' · '+camp)})'>${s.enroll}</span>`:'—'}</td>
-        </tr>`).join('')}</tbody>`;
-      return agRow+campSubRows;
-    }).join('');
-  } else {
-    otCard.style.display='none';
-  }
+  window._openerCalls=calls.filter(r=>OPENERS.has((r._name||'').toLowerCase()));
+  const otCamps=[...new Set(window._openerCalls.map(r=>r._campaign))].sort();
+  const otCampSel=document.getElementById('otCampFilter');
+  if(otCampSel) otCampSel.innerHTML='<option value="">All Campaigns</option>'+otCamps.map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('openerTransferCard').style.display=window._openerCalls.length?'':'none';
+  renderOpenerTable();
 
   window._campMap=campMap;
   window._campDirMap=campDirMap;
