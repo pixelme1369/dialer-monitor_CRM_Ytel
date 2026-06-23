@@ -1432,7 +1432,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const typeTag={Marketing:'<span class="tag mkt">Marketing</span>',Manual:'<span class="tag man">Manual</span>',VDCL:'<span class="tag vdcl">VDCL</span>',Other:'<span class="tag oth">Other</span>'};
   document.getElementById('campBody').innerHTML=campRows.map(([camp,d],i)=>{
     const rowId='camp-ag-'+i;
-    const agentRows=Object.entries(campAgentMap[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
+    let agentRows=Object.entries(campAgentMap[camp]||{}).sort((a,b)=>b[1].calls-a[1].calls);
+    if(_campRoleFilter==='closer') agentRows=agentRows.filter(([ag])=>CLOSERS.has(ag.toLowerCase()));
+    else if(_campRoleFilter==='opener') agentRows=agentRows.filter(([ag])=>OPENERS.has(ag.toLowerCase()));
     const agentSubRows=agentRows.map(([ag,a])=>`
       <tr class="camp-agent-row" style="display:none" data-parent="${rowId}">
         <td style="text-align:left;padding-left:32px;color:var(--text-muted);font-size:11px">↳ ${ag}${RETENTION.has(ag.toLowerCase())?'<span class="tag-retention">Retention</span>':OPENERS.has(ag.toLowerCase())?'<span class="tag-opener">Opener</span>':''}</td>
