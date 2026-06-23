@@ -561,15 +561,19 @@ function filterAgents(type){
   const tbody=document.getElementById('agentBody');
   if(!tbody) return;
 
-  function buildRowsFromMap(agentDataMap){
+  function buildRowsFromMap(agentDataMap, forcedDir){
     return Object.entries(agentDataMap).map(([name,d])=>{
       const uniqueCalls=d.phones.size;
       const credit=window._agentEnrollCredit?.[name.toLowerCase()]||{count:0,debt:0};
       let inboundUniq=0,outboundUniq=0;
-      d.phones.forEach(phone=>{
-        const fd=(window._agentPhoneFirstDir||{})[name+'||'+phone];
-        if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
-      });
+      if(forcedDir==='inbound'){ inboundUniq=uniqueCalls; }
+      else if(forcedDir==='outbound'){ outboundUniq=uniqueCalls; }
+      else {
+        d.phones.forEach(phone=>{
+          const fd=(window._agentPhoneFirstDir||{})[name+'||'+phone];
+          if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
+        });
+      }
       return {...d,name,uniqueCalls,enr:d.enr||credit.count,debt:d.debt||credit.debt,inboundUniq,outboundUniq,
         avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
@@ -589,7 +593,7 @@ function filterAgents(type){
 
   // Direction-only filter
   if(dirFilter && window._agentDirMap){
-    let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{});
+    let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{}, dirFilter);
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
     document.getElementById('agentCount').textContent=rows.length+' agents ('+dirFilter+')';
