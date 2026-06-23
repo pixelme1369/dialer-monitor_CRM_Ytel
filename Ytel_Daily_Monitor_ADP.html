@@ -265,6 +265,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
           <option value="inbound">Inbound</option>
           <option value="outbound">Outbound</option>
         </select>
+        <input id="af-name" type="text" oninput="filterAgents()" placeholder="Search agent…" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text);font-family:var(--font);outline:none;width:130px">
       </div>
     </div>
     <div class="tbl-wrap">
@@ -558,8 +559,11 @@ function filterAgents(type){
   }
   const campFilter=(document.getElementById('af-camp')?.value||'');
   const dirFilter=(document.getElementById('af-dir')?.value||'');
+  const nameFilter=(document.getElementById('af-name')?.value||'').toLowerCase().trim();
   const tbody=document.getElementById('agentBody');
   if(!tbody) return;
+
+  const applyNameFilter=rows=>nameFilter?rows.filter(a=>a.name.toLowerCase().includes(nameFilter)):rows;
 
   function buildRowsFromMap(agentDataMap, forcedDir){
     return Object.entries(agentDataMap).map(([name,d])=>{
@@ -585,9 +589,10 @@ function filterAgents(type){
     let rows=buildRowsFromMap(sourceMap);
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
+    rows=applyNameFilter(rows);
     const label=campFilter+(dirFilter?' · '+dirFilter:'');
     document.getElementById('agentCount').textContent=rows.length+' agents ('+label+')';
-    window.renderAgentBody(rows);
+    window.renderAgentBody(rows, (window._agentHourCampMap||{})[campFilter]);
     return;
   }
 
@@ -596,16 +601,18 @@ function filterAgents(type){
     let rows=buildRowsFromMap(window._agentDirMap[dirFilter]||{}, dirFilter);
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
+    rows=applyNameFilter(rows);
     document.getElementById('agentCount').textContent=rows.length+' agents ('+dirFilter+')';
-    window.renderAgentBody(rows);
+    window.renderAgentBody(rows, (window._agentHourDirMap||{})[dirFilter]);
     return;
   }
 
-  // No filters: full data
+  // No filters (or name-only): full data
   if(window._agentAllRows){
     let rows=window._agentAllRows;
     if(_agentRoleFilter==='closer') rows=rows.filter(a=>CLOSERS.has(a.name.toLowerCase()));
     if(_agentRoleFilter==='opener') rows=rows.filter(a=>OPENERS.has(a.name.toLowerCase()));
+    rows=applyNameFilter(rows);
     document.getElementById('agentCount').textContent=rows.length+' agents';
     window.renderAgentBody(rows);
   }
@@ -1268,15 +1275,17 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       if(!agentPhoneFirstCall[r._name]) agentPhoneFirstCall[r._name]={};
       if(!agentPhoneLastCall[r._name]) agentPhoneLastCall[r._name]={};
       if(!agentPhoneFirstCall[r._name][r._phone]||ts<agentPhoneFirstCall[r._name][r._phone].ts)
-        agentPhoneFirstCall[r._name][r._phone]={hk,ts,dir:r._dir};
+        agentPhoneFirstCall[r._name][r._phone]={hk,ts,dir:r._dir,camp:r._campaign};
       if(!agentPhoneLastCall[r._name][r._phone]||ts>agentPhoneLastCall[r._name][r._phone].ts)
-        agentPhoneLastCall[r._name][r._phone]={hk,ts};
+        agentPhoneLastCall[r._name][r._phone]={hk,ts,dir:r._dir,camp:r._campaign};
     }
   });
 
   const agentMap={};
   const agentDirMap={inbound:{},outbound:{}};
   const agentHourMap={};
+  const agentHourDirMap={inbound:{},outbound:{}};
+  const agentHourCampMap={}; // {camp: {agentName: {hk: stats}}}
   const agentCampsMap={};
   const agentCampDataMap={}; // {camp: {agentName: stats}}
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
@@ -1324,27 +1333,42 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     // hourly breakdown
     const hr=parseInt(r._hour);
     if(!isNaN(hr)){
-      if(!agentHourMap[r._name]) agentHourMap[r._name]={};
       const hk=String(hr).padStart(2,'0')+':00';
-      if(!agentHourMap[r._name][hk]) agentHourMap[r._name][hk]={calls:0,short:0,lt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,sec:0};
-      const h=agentHourMap[r._name][hk]; h.calls++; h.sec+=r._sec;
-      if(r._sec<=30) h.short++;
-      if(r._sec<120) h.lt2m++;
-      if(r._sec>=300&&r._sec<600) h.r5to10++;
-      else if(r._sec>=600&&r._sec<900) h.r10to15++;
-      else if(r._sec>=900&&r._sec<1200) h.r15to20++;
-      else if(r._sec>=1200&&r._sec<1800) h.r20to30++;
-      else if(r._sec>=1800) h.gt30m++;
+      const addHourEntry=(m,name)=>{
+        if(!m[name]) m[name]={};
+        if(!m[name][hk]) m[name][hk]={calls:0,short:0,lt2m:0,r5to10:0,r10to15:0,r15to20:0,r20to30:0,gt30m:0,sec:0};
+        return m[name][hk];
+      };
+      const h=addHourEntry(agentHourMap,r._name);
+      const hd=addHourEntry(agentHourDirMap[r._dir==='inbound'?'inbound':'outbound'],r._name);
+      if(r._campaign){
+        if(!agentHourCampMap[r._campaign]) agentHourCampMap[r._campaign]={};
+      }
+      const hc=r._campaign?addHourEntry(agentHourCampMap[r._campaign],r._name):null;
+      [h,hd,...(hc?[hc]:[])].forEach(x=>{
+        x.calls++; x.sec+=r._sec;
+        if(r._sec<=30) x.short++;
+        if(r._sec<120) x.lt2m++;
+        if(r._sec>=300&&r._sec<600) x.r5to10++;
+        else if(r._sec>=600&&r._sec<900) x.r10to15++;
+        else if(r._sec>=900&&r._sec<1200) x.r15to20++;
+        else if(r._sec>=1200&&r._sec<1800) x.r20to30++;
+        else if(r._sec>=1800) x.gt30m++;
+      });
     }
   });
 
   // Post-process: populate hourly unique counts (first-call-of-day hour per phone)
   Object.entries(agentPhoneFirstCall).forEach(([name,phoneMap])=>{
-    Object.entries(phoneMap).forEach(([phone,{hk,dir}])=>{
-      if(!agentHourMap[name]||!agentHourMap[name][hk]) return;
-      const h=agentHourMap[name][hk];
-      if(!h.uniqueFirstDir) h.uniqueFirstDir={};
-      h.uniqueFirstDir[phone]=dir;
+    Object.entries(phoneMap).forEach(([phone,{hk,dir,camp}])=>{
+      const dirKey=dir==='inbound'?'inbound':'outbound';
+      const maps=[[agentHourMap,name],[agentHourDirMap[dirKey],name]];
+      if(camp&&agentHourCampMap[camp]) maps.push([agentHourCampMap[camp],name]);
+      maps.forEach(([m,n])=>{
+        if(!m[n]||!m[n][hk]) return;
+        if(!m[n][hk].uniqueFirstDir) m[n][hk].uniqueFirstDir={};
+        m[n][hk].uniqueFirstDir[phone]=dir;
+      });
     });
   });
 
@@ -1355,8 +1379,13 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     phones.forEach(phone=>{
       const last=agentPhoneLastCall[agentName]&&agentPhoneLastCall[agentName][phone];
       if(!last) return;
-      if(!agentHourMap[agentName]||!agentHourMap[agentName][last.hk]) return;
-      agentHourMap[agentName][last.hk].enrHour=(agentHourMap[agentName][last.hk].enrHour||0)+1;
+      const lastDir=last.dir==='inbound'?'inbound':'outbound';
+      const maps=[[agentHourMap,agentName],[agentHourDirMap[lastDir],agentName]];
+      if(last.camp&&agentHourCampMap[last.camp]) maps.push([agentHourCampMap[last.camp],agentName]);
+      maps.forEach(([m,n])=>{
+        if(!m[n]||!m[n][last.hk]) return;
+        m[n][last.hk].enrHour=(m[n][last.hk].enrHour||0)+1;
+      });
     });
   });
 
@@ -1382,6 +1411,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   window._agentEnrollCredit=agentEnrollCredit;
   window._agentEnrollPhones=agentEnrollPhones;
   window._agentPhoneFirstDir=agentPhoneFirstDir;
+  window._agentHourMap=agentHourMap;
+  window._agentHourDirMap=agentHourDirMap;
+  window._agentHourCampMap=agentHourCampMap;
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
   document.getElementById('agentCount').textContent=agentRows.length+' agents';
@@ -1389,7 +1421,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const allCamps=[...new Set(calls.map(r=>r._campaign).filter(Boolean))].sort();
   const campSel=document.getElementById('af-camp');
   if(campSel){ campSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
-  window.renderAgentBody=function renderAgentBody(rows){
+  window.renderAgentBody=function renderAgentBody(rows, hourMapSrc){
+    const activeHourMap=hourMapSrc||(window._agentHourMap||agentHourMap);
     const maxC=rows[0]?rows[0].calls:1;
     const enrollPhones=window._agentEnrollPhones||agentEnrollPhones;
     document.getElementById('agentBody').innerHTML=rows.map((a,i)=>{
@@ -1397,7 +1430,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       const shortCls=a.shortPct>55?'bad':'';
       const isOpener=OPENERS.has(a.name.toLowerCase());
       const rowId='agent-hr-'+i;
-      const hours=agentHourMap[a.name]||{};
+      const hours=activeHourMap[a.name]||{};
       const hourKeys=Object.keys(hours).sort();
       const hourRows=hourKeys.map(hk=>{
         const h=hours[hk];
