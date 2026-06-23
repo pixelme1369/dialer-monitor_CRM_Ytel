@@ -346,6 +346,9 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
           <button onclick="filterCampTable('closer')" id="cr-closer" class="af-btn">Closers</button>
           <button onclick="filterCampTable('opener')" id="cr-opener" class="af-btn">Openers</button>
         </div>
+        <select id="campNameFilter" onchange="filterCampTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Campaigns</option>
+        </select>
         <select id="campDirFilter" onchange="filterCampTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
           <option value="">All Directions</option>
           <option value="inbound">Inbound</option>
@@ -584,11 +587,13 @@ function filterCampTable(role){
   }
   if(!window.renderCampBody||!window._campCalls) return;
   const dir=document.getElementById('campDirFilter')?.value||'';
+  const campName=document.getElementById('campNameFilter')?.value||'';
   // If no filters, use prebuilt maps
-  if(_campRoleFilter==='all' && !dir){ window.renderCampBody(window._campMap||{}); return; }
-  if(_campRoleFilter==='all' && dir){ window.renderCampBody((window._campDirMap||{})[dir]||{}); return; }
-  // Role filter: rebuild campMap from raw calls filtered by role+dir
+  if(_campRoleFilter==='all' && !dir && !campName){ window.renderCampBody(window._campMap||{}); return; }
+  if(_campRoleFilter==='all' && dir && !campName){ window.renderCampBody((window._campDirMap||{})[dir]||{}); return; }
+  // Rebuild campMap from raw calls with active filters
   const filtered=window._campCalls.filter(r=>{
+    if(campName && r._campaign!==campName) return false;
     if(dir && r._dir!==dir) return false;
     const n=(r._name||'').toLowerCase();
     if(_campRoleFilter==='closer') return CLOSERS.has(n);
@@ -1292,6 +1297,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   // Populate funnel campaign dropdown
   const ffCampSel=document.getElementById('ff-camp');
   if(ffCampSel){ ffCampSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
+
+  // Populate campaign breakdown campaign dropdown
+  const campNameSel=document.getElementById('campNameFilter');
+  if(campNameSel){ campNameSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
 
   // Funnel table sorting
   (function(){
