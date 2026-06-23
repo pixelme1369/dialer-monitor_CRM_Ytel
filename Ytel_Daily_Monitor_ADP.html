@@ -346,6 +346,9 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
           <button onclick="filterCampTable('closer')" id="cr-closer" class="af-btn">Closers</button>
           <button onclick="filterCampTable('opener')" id="cr-opener" class="af-btn">Openers</button>
         </div>
+        <select id="campNameFilter" onchange="filterCampTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
+          <option value="">All Campaigns</option>
+        </select>
         <select id="campDirFilter" onchange="filterCampTable()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--gray-100);color:var(--text-muted);cursor:pointer;font-family:var(--font)">
           <option value="">All Directions</option>
           <option value="inbound">Inbound</option>
@@ -584,11 +587,13 @@ function filterCampTable(role){
   }
   if(!window.renderCampBody||!window._campCalls) return;
   const dir=document.getElementById('campDirFilter')?.value||'';
+  const campName=document.getElementById('campNameFilter')?.value||'';
   // If no filters, use prebuilt maps
-  if(_campRoleFilter==='all' && !dir){ window.renderCampBody(window._campMap||{}); return; }
-  if(_campRoleFilter==='all' && dir){ window.renderCampBody((window._campDirMap||{})[dir]||{}); return; }
-  // Role filter: rebuild campMap from raw calls filtered by role+dir
+  if(_campRoleFilter==='all' && !dir && !campName){ window.renderCampBody(window._campMap||{}); return; }
+  if(_campRoleFilter==='all' && dir && !campName){ window.renderCampBody((window._campDirMap||{})[dir]||{}); return; }
+  // Rebuild campMap from raw calls with active filters
   const filtered=window._campCalls.filter(r=>{
+    if(campName && r._campaign!==campName) return false;
     if(dir && r._dir!==dir) return false;
     const n=(r._name||'').toLowerCase();
     if(_campRoleFilter==='closer') return CLOSERS.has(n);
@@ -1293,6 +1298,10 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const ffCampSel=document.getElementById('ff-camp');
   if(ffCampSel){ ffCampSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
 
+  // Populate campaign breakdown campaign dropdown
+  const campNameSel=document.getElementById('campNameFilter');
+  if(campNameSel){ campNameSel.innerHTML='<option value="">All Campaigns</option>'+allCamps.map(c=>`<option value="${c}">${c}</option>`).join(''); }
+
   // Funnel table sorting
   (function(){
     const thead=document.getElementById('funnelHead');
@@ -1441,9 +1450,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
         <td>${a.calls}</td>
         <td>${a.short} <span style="color:var(--text-muted);font-size:11px">${pct(a.short,a.calls)}</span></td>
         <td>${funnelCell(a.lt2m,a.calls,"var(--red)")}</td>
-        <td>${funnelCell(a.gt2m,0,null)}</td>
-        <td>${funnelCell(a.gt5m,0,null)}</td>
-        <td>${funnelCell(a.gt10m,0,null)}</td>
+        <td>${funnelCell(a.gt2m,a.calls,"var(--text-muted)")}</td>
+        <td>${funnelCell(a.gt5m,a.calls,"var(--text-muted)")}</td>
+        <td>${funnelCell(a.gt10m,a.calls,"var(--text-muted)")}</td>
         <td>${funnelCell(a.gt15m,a.calls,"var(--green-dk)")}</td>
         <td>${funnelCell(a.gt30m,a.calls,"var(--green-dk)")}</td>
         <td>${a.drops>0?'<span style="color:var(--red);font-weight:600">'+a.drops+'</span>':'—'}</td>
@@ -1455,9 +1464,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       <td>${d.calls}</td>
       <td>${d.short} <span style="color:var(--text-muted);font-size:11px">${pct(d.short,d.calls)}</span></td>
       <td>${funnelCell(d.lt2m,d.calls,"var(--red)")}</td>
-      <td>${funnelCell(d.gt2m,0,null)}</td>
-      <td>${funnelCell(d.gt5m,0,null)}</td>
-      <td>${funnelCell(d.gt10m,0,null)}</td>
+      <td>${funnelCell(d.gt2m,d.calls,"var(--text-muted)")}</td>
+      <td>${funnelCell(d.gt5m,d.calls,"var(--text-muted)")}</td>
+      <td>${funnelCell(d.gt10m,d.calls,"var(--text-muted)")}</td>
       <td>${funnelCell(d.gt15m,d.calls,"var(--green-dk)")}</td>
       <td>${funnelCell(d.gt30m,d.calls,"var(--green-dk)")}</td>
       <td>${d.drops>0?'<span style="color:var(--red);font-weight:600">'+d.drops+'</span>':'—'}</td>
@@ -1480,9 +1489,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     <td>${cTot.calls}</td>
     <td>${cTot.short} <span style="color:var(--text-muted);font-size:11px">${pct(cTot.short,cTot.calls)}</span></td>
     <td>${funnelCell(cTot.lt2m,cTot.calls,"var(--red)")}</td>
-    <td>${funnelCell(cTot.gt2m,0,null)}</td>
-    <td>${funnelCell(cTot.gt5m,0,null)}</td>
-    <td>${funnelCell(cTot.gt10m,0,null)}</td>
+    <td>${funnelCell(cTot.gt2m,cTot.calls,"var(--text-muted)")}</td>
+    <td>${funnelCell(cTot.gt5m,cTot.calls,"var(--text-muted)")}</td>
+    <td>${funnelCell(cTot.gt10m,cTot.calls,"var(--text-muted)")}</td>
     <td>${funnelCell(cTot.gt15m,cTot.calls,"var(--green-dk)")}</td>
     <td>${funnelCell(cTot.gt30m,cTot.calls,"var(--green-dk)")}</td>
     <td>${cTot.drops>0?'<span style="color:var(--red);font-weight:600">'+cTot.drops+'</span>':'—'}</td>
