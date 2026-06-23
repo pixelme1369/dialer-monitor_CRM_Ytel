@@ -592,7 +592,7 @@ function filterAgents(type){
     rows=applyNameFilter(rows);
     const label=campFilter+(dirFilter?' · '+dirFilter:'');
     document.getElementById('agentCount').textContent=rows.length+' agents ('+label+')';
-    window.renderAgentBody(rows);
+    window.renderAgentBody(rows, (window._agentHourCampMap||{})[campFilter]);
     return;
   }
 
@@ -1275,9 +1275,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       if(!agentPhoneFirstCall[r._name]) agentPhoneFirstCall[r._name]={};
       if(!agentPhoneLastCall[r._name]) agentPhoneLastCall[r._name]={};
       if(!agentPhoneFirstCall[r._name][r._phone]||ts<agentPhoneFirstCall[r._name][r._phone].ts)
-        agentPhoneFirstCall[r._name][r._phone]={hk,ts,dir:r._dir};
+        agentPhoneFirstCall[r._name][r._phone]={hk,ts,dir:r._dir,camp:r._campaign};
       if(!agentPhoneLastCall[r._name][r._phone]||ts>agentPhoneLastCall[r._name][r._phone].ts)
-        agentPhoneLastCall[r._name][r._phone]={hk,ts};
+        agentPhoneLastCall[r._name][r._phone]={hk,ts,dir:r._dir,camp:r._campaign};
     }
   });
 
@@ -1285,6 +1285,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   const agentDirMap={inbound:{},outbound:{}};
   const agentHourMap={};
   const agentHourDirMap={inbound:{},outbound:{}};
+  const agentHourCampMap={}; // {camp: {agentName: {hk: stats}}}
   const agentCampsMap={};
   const agentCampDataMap={}; // {camp: {agentName: stats}}
   calls.filter(r=>!['VDCL','VDAD'].includes(r._user)).forEach(r=>{
@@ -1340,7 +1341,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       };
       const h=addHourEntry(agentHourMap,r._name);
       const hd=addHourEntry(agentHourDirMap[r._dir==='inbound'?'inbound':'outbound'],r._name);
-      [h,hd].forEach(x=>{
+      if(r._campaign){
+        if(!agentHourCampMap[r._campaign]) agentHourCampMap[r._campaign]={};
+      }
+      const hc=r._campaign?addHourEntry(agentHourCampMap[r._campaign],r._name):null;
+      [h,hd,...(hc?[hc]:[])].forEach(x=>{
         x.calls++; x.sec+=r._sec;
         if(r._sec<=30) x.short++;
         if(r._sec<120) x.lt2m++;
@@ -1355,9 +1360,11 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
 
   // Post-process: populate hourly unique counts (first-call-of-day hour per phone)
   Object.entries(agentPhoneFirstCall).forEach(([name,phoneMap])=>{
-    Object.entries(phoneMap).forEach(([phone,{hk,dir}])=>{
+    Object.entries(phoneMap).forEach(([phone,{hk,dir,camp}])=>{
       const dirKey=dir==='inbound'?'inbound':'outbound';
-      [[agentHourMap,name],[agentHourDirMap[dirKey],name]].forEach(([m,n])=>{
+      const maps=[[agentHourMap,name],[agentHourDirMap[dirKey],name]];
+      if(camp&&agentHourCampMap[camp]) maps.push([agentHourCampMap[camp],name]);
+      maps.forEach(([m,n])=>{
         if(!m[n]||!m[n][hk]) return;
         if(!m[n][hk].uniqueFirstDir) m[n][hk].uniqueFirstDir={};
         m[n][hk].uniqueFirstDir[phone]=dir;
@@ -1373,7 +1380,9 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
       const last=agentPhoneLastCall[agentName]&&agentPhoneLastCall[agentName][phone];
       if(!last) return;
       const lastDir=last.dir==='inbound'?'inbound':'outbound';
-      [[agentHourMap,agentName],[agentHourDirMap[lastDir],agentName]].forEach(([m,n])=>{
+      const maps=[[agentHourMap,agentName],[agentHourDirMap[lastDir],agentName]];
+      if(last.camp&&agentHourCampMap[last.camp]) maps.push([agentHourCampMap[last.camp],agentName]);
+      maps.forEach(([m,n])=>{
         if(!m[n]||!m[n][last.hk]) return;
         m[n][last.hk].enrHour=(m[n][last.hk].enrHour||0)+1;
       });
@@ -1404,6 +1413,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   window._agentPhoneFirstDir=agentPhoneFirstDir;
   window._agentHourMap=agentHourMap;
   window._agentHourDirMap=agentHourDirMap;
+  window._agentHourCampMap=agentHourCampMap;
 
   const maxCalls=agentRows[0]?agentRows[0].calls:1;
   document.getElementById('agentCount').textContent=agentRows.length+' agents';
