@@ -620,7 +620,7 @@ function filterCampTable(role){
   const map={};
   filtered.forEach(r=>{
     const c=r._campaign;
-    if(!map[c]) map[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set()};
+    if(!map[c]) map[c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set(),enrolledPhones:new Set()};
     const d=map[c]; d.calls++; d.sec+=r._sec;
     if(r._sec<=30) d.short++;
     if(r._sec<120) d.lt2m++;
@@ -630,7 +630,7 @@ function filterCampTable(role){
     if(r._sec>=900) d.gt15m++;
     if(r._sec>=1800) d.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) d.drops++;
-    if(r._enrolled) d.enroll++;
+    if(r._enrolled){ d.enroll++; if(r._phone) d.enrolledPhones.add(r._phone); }
   });
   window.renderCampBody(map);
 }
@@ -1429,7 +1429,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._enrolled){ d.enroll++; if(r._phone) d.enrolledPhones.add(r._phone); }
     // direction breakdown
     const dir=r._dir==='inbound'?'inbound':'outbound';
-    if(!campDirMap[dir][c]) campDirMap[dir][c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set()};
+    if(!campDirMap[dir][c]) campDirMap[dir][c]={type:r._type,calls:0,short:0,sec:0,lt2m:0,gt2m:0,gt5m:0,gt10m:0,gt15m:0,gt30m:0,drops:0,enroll:0,phonesGt2m:new Set(),enrolledPhones:new Set()};
     const dd=campDirMap[dir][c]; dd.calls++; dd.sec+=r._sec;
     if(r._sec<=30) dd.short++;
     if(r._sec<120) dd.lt2m++;
@@ -1439,7 +1439,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     if(r._sec>=900) dd.gt15m++;
     if(r._sec>=1800) dd.gt30m++;
     if(['DROP','TIMEOT'].includes(r._status)) dd.drops++;
-    if(r._enrolled) dd.enroll++;
+    if(r._enrolled){ dd.enroll++; if(r._phone) dd.enrolledPhones.add(r._phone); }
     // per-campaign per-agent
     if(!campAgentMap[c]) campAgentMap[c]={};
     const ag=r._name||'Unknown';
