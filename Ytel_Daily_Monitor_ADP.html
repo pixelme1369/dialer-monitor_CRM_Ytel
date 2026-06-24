@@ -515,6 +515,24 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     </div>
   </div>
 
+  <!-- OPENERS LOWEST CONVERSION 2-15 MIN -->
+  <div class="card" id="openerConvCard" style="display:none">
+    <div class="card-title">Openers — Lowest Transfer Rate on 2–15 min Calls <span class="card-title-sub">transfers ÷ calls in 2–15 min range · sorted by rate ascending</span></div>
+    <div class="tbl-wrap">
+      <table id="openerConvTable">
+        <thead>
+          <tr>
+            <th style="text-align:left">Agent</th>
+            <th>Calls (2–15 min)</th>
+            <th>Transfers</th>
+            <th>Conversion Rate</th>
+          </tr>
+        </thead>
+        <tbody id="openerConvBody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- EMPTY STATE -->
@@ -879,6 +897,25 @@ function renderOpenerTable(){
       <td>${totEnr>0?'<span style="color:var(--green-dk)">'+totEnr+'</span>':'—'}</td>
     </tr>`;
   document.getElementById('openerSummaryCard').style.display='';
+
+  // Lowest transfer rate (2–15 min) per agent
+  const convRows=agEntries.map(([ag,camps])=>{
+    const tot=Object.values(camps).reduce((t,s)=>addS(t,s),zeroTot());
+    const calls=(tot.r2to5m||0)+(tot.r5to10||0)+(tot.r10to15||0);
+    const trns=(tot.cltrns_2to5m||0)+(tot.cltrns_5to10||0)+(tot.cltrns_10to15||0);
+    return {ag,calls,trns,rate:calls>0?trns/calls:null};
+  }).filter(r=>r.calls>0).sort((a,b)=>a.rate-b.rate);
+  document.getElementById('openerConvBody').innerHTML=convRows.map(r=>{
+    const ratePct=(r.rate*100).toFixed(1)+'%';
+    const color=r.rate>=0.3?'var(--green-dk)':r.rate>=0.15?'var(--text)':'var(--red)';
+    return `<tr>
+      <td style="text-align:left;font-weight:600">${r.ag}</td>
+      <td>${r.calls}</td>
+      <td>${r.trns}</td>
+      <td style="font-weight:700;color:${color}">${ratePct}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('openerConvCard').style.display=convRows.length?'':'none';
 }
 function toggleOpenerAgent(agId){
   const subs=document.querySelectorAll('.ot-sub-row[data-parent="'+agId+'"]');
