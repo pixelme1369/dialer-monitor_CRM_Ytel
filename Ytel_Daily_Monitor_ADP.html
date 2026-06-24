@@ -480,6 +480,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
             <th style="text-align:left">Campaign</th>
             <th>Calls (total)</th>
             <th>Dead ≤30s</th>
+            <th>30s–2 min</th>
             <th>5–10 min</th>
             <th>10–15 min</th>
             <th>15–20 min</th>
@@ -714,6 +715,7 @@ function renderOpenerTable(){
     return true;
   });
   const emptyS=()=>({calls:0,short:0,sec:0,drops:0,enroll:0,enrolledPhones:new Set(),
+    r30to2m:0, cltrns_30to2m:0, enroll_30to2m:0,
     r5to10:0,  cltrns_5to10:0,  enroll_5to10:0,
     r10to15:0, cltrns_10to15:0, enroll_10to15:0,
     r15to20:0, cltrns_15to20:0, enroll_15to20:0,
@@ -733,7 +735,9 @@ function renderOpenerTable(){
     if(['DROP','TIMEOT'].includes(r._status)) s.drops++;
     if(isEnr){ s.enroll++; if(r._phone) s.enrolledPhones.add(r._phone); }
     const sec=r._sec;
-    if(sec>=300&&sec<600){
+    if(sec>30&&sec<120){
+      s.r30to2m++; if(isCL){ s.cltrns_30to2m++; if(isEnr) s.enroll_30to2m++; }
+    } else if(sec>=300&&sec<600){
       s.r5to10++;  if(isCL){ s.cltrns_5to10++;  if(isEnr) s.enroll_5to10++; }
     } else if(sec>=600&&sec<900){
       s.r10to15++; if(isCL){ s.cltrns_10to15++; if(isEnr) s.enroll_10to15++; }
@@ -754,6 +758,7 @@ function renderOpenerTable(){
   };
   const addS=(t,s)=>({
     calls:t.calls+s.calls,short:t.short+s.short,sec:t.sec+s.sec,drops:t.drops+s.drops,enroll:t.enroll+s.enroll,
+    r30to2m:t.r30to2m+s.r30to2m,  cltrns_30to2m:t.cltrns_30to2m+s.cltrns_30to2m, enroll_30to2m:t.enroll_30to2m+s.enroll_30to2m,
     r5to10:t.r5to10+s.r5to10,     cltrns_5to10:t.cltrns_5to10+s.cltrns_5to10,     enroll_5to10:t.enroll_5to10+s.enroll_5to10,
     r10to15:t.r10to15+s.r10to15,  cltrns_10to15:t.cltrns_10to15+s.cltrns_10to15,  enroll_10to15:t.enroll_10to15+s.enroll_10to15,
     r15to20:t.r15to20+s.r15to20,  cltrns_15to20:t.cltrns_15to20+s.cltrns_15to20,  enroll_15to20:t.enroll_15to20+s.enroll_15to20,
@@ -762,6 +767,7 @@ function renderOpenerTable(){
     enrolledPhones:new Set([...t.enrolledPhones,...s.enrolledPhones])
   });
   const zeroTot=()=>({calls:0,short:0,sec:0,drops:0,enroll:0,
+    r30to2m:0,cltrns_30to2m:0,enroll_30to2m:0,
     r5to10:0,cltrns_5to10:0,enroll_5to10:0,r10to15:0,cltrns_10to15:0,enroll_10to15:0,
     r15to20:0,cltrns_15to20:0,enroll_15to20:0,r20to30:0,cltrns_20to30:0,enroll_20to30:0,
     gt30m:0,cltrns_gt30:0,enroll_gt30:0,enrolledPhones:new Set()});
@@ -784,6 +790,7 @@ function renderOpenerTable(){
       ${firstCols}
       <td>${s.calls}</td>
       <td>${s.short} <span style="color:var(--text-muted);font-size:11px">${pct(s.short,s.calls)}</span></td>
+      <td>${rangeCell(s.cltrns_30to2m,s.enroll_30to2m,s.r30to2m)}</td>
       <td>${rangeCell(s.cltrns_5to10,s.enroll_5to10,s.r5to10)}</td>
       <td>${rangeCell(s.cltrns_10to15,s.enroll_10to15,s.r10to15)}</td>
       <td>${rangeCell(s.cltrns_15to20,s.enroll_15to20,s.r15to20)}</td>
