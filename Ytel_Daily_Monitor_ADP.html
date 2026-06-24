@@ -496,6 +496,24 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
     </div>
   </div>
 
+  <!-- OPENERS SUMMARY -->
+  <div class="card" id="openerSummaryCard" style="display:none">
+    <div class="card-title">Openers Summary</div>
+    <div class="tbl-wrap">
+      <table id="openerSummaryTable">
+        <thead>
+          <tr>
+            <th style="text-align:left">Time Bracket</th>
+            <th>Total Calls</th>
+            <th>Total Transfers</th>
+            <th>Total Enrolled</th>
+          </tr>
+        </thead>
+        <tbody id="openerSummaryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- EMPTY STATE -->
@@ -813,6 +831,34 @@ function renderOpenerTable(){
       +campEntries.map(([camp,s])=>renderRow(s,ag,camp,'sub',agId)).join('');
   }).join('');
   document.getElementById('openerTransferBody').innerHTML=rows+renderRow(grandTot,'','','total','');
+
+  // Openers Summary table
+  const brackets=[
+    {label:'Dead ≤30s',    calls:grandTot.short,       trns:0,                      enr:0},
+    {label:'30s–2 min',    calls:grandTot.r30to2m,     trns:grandTot.cltrns_30to2m, enr:grandTot.enroll_30to2m},
+    {label:'5–10 min',     calls:grandTot.r5to10,      trns:grandTot.cltrns_5to10,  enr:grandTot.enroll_5to10},
+    {label:'10–15 min',    calls:grandTot.r10to15,     trns:grandTot.cltrns_10to15, enr:grandTot.enroll_10to15},
+    {label:'15–20 min',    calls:grandTot.r15to20,     trns:grandTot.cltrns_15to20, enr:grandTot.enroll_15to20},
+    {label:'20–30 min',    calls:grandTot.r20to30,     trns:grandTot.cltrns_20to30, enr:grandTot.enroll_20to30},
+    {label:'30+ min',      calls:grandTot.gt30m,       trns:grandTot.cltrns_gt30,   enr:grandTot.enroll_gt30},
+  ];
+  const totCalls=brackets.reduce((s,b)=>s+b.calls,0);
+  const totTrns=brackets.reduce((s,b)=>s+b.trns,0);
+  const totEnr=brackets.reduce((s,b)=>s+b.enr,0);
+  document.getElementById('openerSummaryBody').innerHTML=
+    brackets.map(b=>`<tr>
+      <td style="text-align:left;font-weight:600">${b.label}</td>
+      <td>${b.calls}</td>
+      <td>${b.trns>0?'<span style="font-weight:700;color:var(--blue)">'+b.trns+'</span>':'—'}</td>
+      <td>${b.enr>0?'<span style="font-weight:700;color:var(--green-dk)">'+b.enr+'</span>':'—'}</td>
+    </tr>`).join('')+
+    `<tr style="font-weight:700;background:var(--gray-100);border-top:2px solid var(--border)">
+      <td style="text-align:left">TOTAL</td>
+      <td>${totCalls}</td>
+      <td>${totTrns>0?'<span style="color:var(--blue)">'+totTrns+'</span>':'—'}</td>
+      <td>${totEnr>0?'<span style="color:var(--green-dk)">'+totEnr+'</span>':'—'}</td>
+    </tr>`;
+  document.getElementById('openerSummaryCard').style.display='';
 }
 function toggleOpenerAgent(agId){
   const subs=document.querySelectorAll('.ot-sub-row[data-parent="'+agId+'"]');
