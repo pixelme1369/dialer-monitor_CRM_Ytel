@@ -32,9 +32,22 @@ All three sets are defined at lines ~588–590 of `Ytel_Daily_Monitor_ADP.html`.
 
 - One enrollment per unique phone number per day
 - `Cordoba Enrolled Date` must match the analysis date
-- Credit goes to the agent named in **`Assigned To`** column (if populated)
-- Fallback: agent with the latest call timestamp to that phone on that day
+- **Agent credit** goes to the agent named in **`Assigned To`** column (if populated); fallback: agent with the latest call timestamp to that phone on that day
 - Debt comes from `Enrolled Debt` column on the enrolled row
+
+### Campaign Attribution (separate from agent credit)
+
+- Enrollment is credited to the **campaign of the first call to that phone on that day**
+- Rationale: if a lead first came in on TransferK, was transferred to an agent on AGENTDIRECT, and closed on campaign 1000 (agent outbound), it counts as a **TransferK enrollment**
+- Campaign `1000` = agent outbound dialer — not a source campaign
+- Implementation: `enrolledFirstCallTs[phone]` = min timestamp across all calls for that phone; `r._enrolled = true` only on that first-call row
+- **Agent credit and campaign attribution are independent** — agent credit uses `agentEnrollCredit` (from `enrolledPhoneAgent`), campaign attribution uses `_enrolled` flag on the first-call row
+
+### Enrolled column in Campaign / Queue Breakdown
+
+- `_enrolled` is set on exactly one row per enrolled phone (the first call row)
+- This prevents double-counting across campaigns (old bug: every row for the phone had `_enrolled=true`)
+- A warning note is shown in the section header explaining the per-row nature
 
 ## Hourly Breakdown Logic
 
