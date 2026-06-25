@@ -16,6 +16,7 @@ No framework, no build step — vanilla JS + SheetJS 0.18.5 + Chart.js 4.4.0 via
 - Ask before changing business logic.
 - Run JS syntax check after edits: `node -e "const fs=require('fs');const h=fs.readFileSync('Ytel_Daily_Monitor_ADP.html','utf8');const s=h.match(/<script>([\s\S]*?)<\/script>/g);s.forEach((b,i)=>{try{new Function(b.replace(/<\/?script>/g,''));console.log('OK',i);}catch(e){console.log('ERR',i,e.message);}});"`
 - Always push to branch `claude/blissful-curie-pvg620` on `pixelme1369/Ytel_Daily_Monitor_ADP`, then merge to `main` when asked.
+- **Always update CLAUDE.md after every code change** to keep it current.
 
 ## Agent Roles
 
@@ -82,6 +83,25 @@ All three sets are defined at lines ~588–590 of `Ytel_Daily_Monitor_ADP.html`.
 - Phone is only flagged if **zero follow-up activity** occurred after the timeout
 - Split into: Enrolled Clients (have `Cordoba Enrolled Date`) vs Other Calls
 - Filterable by campaign dropdown
+
+## DPC — Dropped Calls Never Called Back
+
+- `DPC` = Dropped Call dispo — the call connected but dropped unexpectedly
+- **Per-event logic**: for each DPC event on a phone, check if any non-DPC call occurred after that DPC's timestamp
+- If a DPC has no non-DPC follow-up → that phone is flagged (even if other DPCs on same phone were followed up)
+- Card is hidden when no flagged phones exist
+- Split into: Enrolled Clients vs Other Calls; filterable by campaign
+- Shows: phone number, enrolled debt (if any), agent who dropped the call, campaign
+- Example: DPC at 07:27 → outbound calls at 07:29 and 07:30 → **not flagged** (follow-up exists)
+- Implementation: `dpcEvents[phone]` = all DPC timestamps; `nonDpcTs[phone]` = all non-DPC timestamps; flag if any DPC has no later non-DPC call
+
+## Agent Performance Table
+
+Time bracket columns (in order): Short% ≤30s | <2 min | **1–2 min** | 5–10 min | 10–15 min | 15–20 min | 20–30 min | 30+ min | Avg Talk | Total Talk | Enrolled | Debt $ | Conv%
+
+- `1–2 min` = 60 ≤ sec < 120 (orange color) — added to highlight calls that had real contact but were short
+- `<2 min` = all calls under 120s (unchanged — includes the 1–2 min range)
+- Bracket data tracked in: `agentMap`, `agentDirMap`, `agentCampDataMap`, hourly map — all use field `r1to2m`
 
 ## Agent Call Funnel Table
 
@@ -181,3 +201,7 @@ Understanding how calls flow helps debug enrollment and campaign attribution:
 | `status = SALE` | Enrollment closed |
 | `status = N` | No Answer |
 | `status = TIMEOT` | Caller timed out in queue — tracked for Missed Callbacks |
+| `status = DPC` | Dropped Call — tracked for DPC Never Called Back section |
+| `status = DROP` | System drop — counted in Drops column of campaign breakdown |
+| `status = A` | Answering Machine |
+| `status = DNC` | Do Not Call |
