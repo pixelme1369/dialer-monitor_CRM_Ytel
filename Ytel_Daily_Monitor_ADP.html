@@ -627,20 +627,24 @@ function toggleMs(id){
 function setMsOptions(id, options, onchange){
   const panel=document.getElementById(id+'-panel');
   if(!panel) return;
+  // All starts checked; individual items also start checked (exclude-mode)
   panel.innerHTML=`<label class="ms-item"><input type="checkbox" value="" checked onchange="onMsAll('${id}','${onchange}')"> All</label>`
-    +options.map(o=>`<label class="ms-item"><input type="checkbox" value="${o}" onchange="onMsItem('${id}','${onchange}')">${o}</label>`).join('');
+    +options.map(o=>`<label class="ms-item"><input type="checkbox" value="${o}" checked onchange="onMsItem('${id}','${onchange}')">${o}</label>`).join('');
   updateMsLabel(id);
 }
 function getMsValues(id){
   const panel=document.getElementById(id+'-panel');
   if(!panel) return [];
-  const allCb=panel.querySelector('input[value=""]');
-  if(!allCb||allCb.checked) return [];
-  return [...panel.querySelectorAll('input:not([value=""])')].filter(cb=>cb.checked).map(cb=>cb.value);
+  const items=[...panel.querySelectorAll('input:not([value=""])')];
+  const checked=items.filter(cb=>cb.checked);
+  // All checked or none checked → no filter (show everything)
+  if(checked.length===0||checked.length===items.length) return [];
+  return checked.map(cb=>cb.value);
 }
 function onMsAll(id,onchange){
+  // "All" clicked → check every individual campaign
   const panel=document.getElementById(id+'-panel');
-  panel.querySelectorAll('input:not([value=""])').forEach(cb=>cb.checked=false);
+  panel.querySelectorAll('input:not([value=""])').forEach(cb=>cb.checked=true);
   panel.querySelector('input[value=""]').checked=true;
   updateMsLabel(id);
   if(onchange&&window[onchange]) window[onchange]();
@@ -648,7 +652,8 @@ function onMsAll(id,onchange){
 function onMsItem(id,onchange){
   const panel=document.getElementById(id+'-panel');
   const items=[...panel.querySelectorAll('input:not([value=""])')];
-  panel.querySelector('input[value=""]').checked=!items.some(cb=>cb.checked);
+  // Sync "All" checkbox: checked only when all individuals are checked
+  panel.querySelector('input[value=""]').checked=items.every(cb=>cb.checked);
   updateMsLabel(id);
   if(onchange&&window[onchange]) window[onchange]();
 }
@@ -656,8 +661,12 @@ function updateMsLabel(id){
   const panel=document.getElementById(id+'-panel');
   const lbl=document.querySelector('#'+id+' .ms-lbl');
   if(!panel||!lbl) return;
-  const sel=[...panel.querySelectorAll('input:not([value=""])')].filter(cb=>cb.checked);
-  lbl.textContent=sel.length===0?'All Campaigns':sel.length===1?sel[0].value:sel.length+' campaigns';
+  const items=[...panel.querySelectorAll('input:not([value=""])')];
+  const checked=items.filter(cb=>cb.checked);
+  const unchecked=items.length-checked.length;
+  if(unchecked===0||checked.length===0) lbl.textContent='All Campaigns';
+  else if(unchecked===1) lbl.textContent='All except 1';
+  else lbl.textContent='All except '+unchecked;
 }
 document.addEventListener('click',function(e){if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel').forEach(p=>p.style.display='none');});
 const CLOSERS=new Set(['peter godwin','adam elqaza','diego acuna','alon yomorta','abed al serwan','josh hallwork','toha serwan','parth desai','robert whitmer','alexander wahlberg','artin namjoo','omar tayara','aj valipour','tyler mason','neka bullock','don bell','faisal habhab','amir moayeri','daniel arreola','shayan bakhoda','chuvar maestas','eileen beeson','logan insuaste','paul simms','john tade','dylan gallagher','lindsey magnusen','angel espraza','logan apana','brian smith','emren salim']);
