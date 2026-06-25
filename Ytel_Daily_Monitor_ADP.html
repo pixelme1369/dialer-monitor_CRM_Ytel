@@ -348,7 +348,7 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
   <!-- CAMPAIGN TABLE -->
   <div class="card">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <span>Campaign / queue breakdown</span>
+      <span>Campaign / queue breakdown <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px" title="⚠️ Enrolled count may be inflated when a phone touches multiple campaigns on the same day. Example: a CLtrns call on TransferK + a SALE on AGENTDIRECT for the same phone both carry Cordoba Enrolled Date, so each campaign counts +1 enrolled — but it is one real enrollment. Use the clickable enrolled number to see the actual phones and spot duplicates.">⚠️ Enrolled = per-row, not per-phone</span></span>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <div id="campRoleBtns" style="display:flex;align-items:center;gap:4px">
           <button onclick="filterCampTable('all')"    id="cr-all"    class="af-btn af-active">All</button>
