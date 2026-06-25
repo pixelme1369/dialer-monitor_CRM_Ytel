@@ -616,7 +616,7 @@ function filterAgents(type){
           if(fd&&fd.dir==='inbound') inboundUniq++; else outboundUniq++;
         });
       }
-      return {...d,name,uniqueCalls,enr:d.enr||credit.count,debt:d.debt||credit.debt,inboundUniq,outboundUniq,
+      return {...d,name,uniqueCalls,enr:credit.count,debt:credit.debt,inboundUniq,outboundUniq,
         avg:d.calls?Math.round(d.sec/d.calls):0,shortPct:d.calls?d.short/d.calls*100:0};
     }).sort((a,b)=>b.calls-a.calls);
   }
