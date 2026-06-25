@@ -469,6 +469,12 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
   <div class="card" id="dpcCard" style="display:none">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
       <div class="card-title" style="color:var(--red);margin:0">⚠ DPC — Dropped Calls Never Called Back</div>
+      <div id="dpcSecFilter" style="display:flex;gap:4px;font-size:11px">
+        <button onclick="setDpcSec('all')" id="dpcSec-all" style="padding:3px 8px;border-radius:3px;border:1px solid var(--border);background:var(--accent);color:#fff;cursor:pointer">All</button>
+        <button onclick="setDpcSec('lt1')" id="dpcSec-lt1" style="padding:3px 8px;border-radius:3px;border:1px solid var(--border);background:var(--white);cursor:pointer">&lt;1 min</button>
+        <button onclick="setDpcSec('1to2')" id="dpcSec-1to2" style="padding:3px 8px;border-radius:3px;border:1px solid var(--border);background:var(--white);cursor:pointer">1–2 min</button>
+        <button onclick="setDpcSec('gt2')" id="dpcSec-gt2" style="padding:3px 8px;border-radius:3px;border:1px solid var(--border);background:var(--white);cursor:pointer">&gt;2 min</button>
+      </div>
       <div class="ms-wrap" id="dpcCampFilter" style="margin-left:auto">
         <button class="ms-btn" style="background:var(--white);border-radius:4px" onclick="toggleMs('dpcCampFilter')"><span class="ms-lbl">All Campaigns</span> ▾</button>
         <div class="ms-panel" id="dpcCampFilter-panel" style="display:none"></div>
@@ -1027,9 +1033,26 @@ function renderMissedCallbacks(){
   document.getElementById('missedOtherCount').textContent='('+other.length+')';
   document.getElementById('missedOtherList').innerHTML=rowHtml(other);
 }
+function setDpcSec(val){
+  window._dpcSecFilter=val;
+  ['all','lt1','1to2','gt2'].forEach(v=>{
+    const btn=document.getElementById('dpcSec-'+v);
+    if(!btn) return;
+    btn.style.background=v===val?'var(--accent)':'var(--white)';
+    btn.style.color=v===val?'#fff':'';
+  });
+  renderDpcDrops();
+}
 function renderDpcDrops(){
   const camps=getMsValues('dpcCampFilter');
-  const data=(window._dpcData||[]).filter(d=>!camps.length||d.camps.some(c=>camps.includes(c)));
+  const secF=window._dpcSecFilter||'all';
+  const data=(window._dpcData||[]).filter(d=>{
+    if(camps.length&&!d.camps.some(c=>camps.includes(c))) return false;
+    if(secF==='lt1'&&d.sec>=60) return false;
+    if(secF==='1to2'&&(d.sec<60||d.sec>=120)) return false;
+    if(secF==='gt2'&&d.sec<120) return false;
+    return true;
+  });
   const enrolled=data.filter(d=>d.enrolled);
   const other=data.filter(d=>!d.enrolled);
   const rowHtml=arr=>arr.map(d=>`<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="font-family:monospace;font-weight:600">${d.phone}</span>${d.debt>0?'<span style="margin-left:8px;font-weight:700;color:var(--green-dk);font-size:11px">'+fmt$(d.debt)+'</span>':''} <span style="color:var(--text-muted);font-size:11px">— dropped by: ${d.agents}</span>${d.camps.length?'<span style="margin-left:6px;font-size:10px;background:var(--gray-100);border:1px solid var(--border);border-radius:3px;padding:1px 5px;color:var(--text-muted)">'+d.camps.join(', ')+'</span>':''}</div>`).join('')||'<div style="color:var(--text-muted);font-size:11px;padding:4px 0">None</div>';
@@ -1358,7 +1381,7 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
   calls.forEach(r=>{
     if(r._status==='DPC'&&r._phone){
       if(!dpcEvents[r._phone]) dpcEvents[r._phone]=[];
-      dpcEvents[r._phone].push({ts:parseTs(r['call_date']||r['date']||''),agent:r._name,camp:r._campaign});
+      dpcEvents[r._phone].push({ts:parseTs(r['call_date']||r['date']||''),agent:r._name,camp:r._campaign,sec:r._sec||0});
     }
   });
   // All non-DPC call timestamps per phone
@@ -1370,15 +1393,16 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     }
   });
   // Flag phones that have at least one DPC with no non-DPC follow-up after it
-  const dpcFlagged={};  // phone → {agents:Set, camps:Set}
+  const dpcFlagged={};  // phone → {agents:Set, camps:Set, secs:[]}
   Object.entries(dpcEvents).forEach(([phone,events])=>{
     const followUps=nonDpcTs[phone]||[];
     events.forEach(ev=>{
       const hasFollowup=followUps.some(t=>t>ev.ts);
       if(!hasFollowup){
-        if(!dpcFlagged[phone]) dpcFlagged[phone]={agents:new Set(),camps:new Set()};
+        if(!dpcFlagged[phone]) dpcFlagged[phone]={agents:new Set(),camps:new Set(),secs:[]};
         if(ev.agent) dpcFlagged[phone].agents.add(ev.agent);
         if(ev.camp) dpcFlagged[phone].camps.add(ev.camp);
+        dpcFlagged[phone].secs.push(ev.sec);
       }
     });
   });
@@ -1388,7 +1412,8 @@ function buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPho
     agents:[...dpcFlagged[p].agents].join(', ')||'—',
     camps:[...dpcFlagged[p].camps],
     enrolled:anyEnrolledPhone.has(p),
-    debt:phoneDebt[p]||0
+    debt:phoneDebt[p]||0,
+    sec:Math.max(...dpcFlagged[p].secs)
   }));
   const allDpcCamps=[...new Set(dpcData.flatMap(d=>d.camps))].sort();
   setMsOptions('dpcCampFilter', allDpcCamps, 'renderDpcDrops');
