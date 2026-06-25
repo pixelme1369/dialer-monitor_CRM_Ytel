@@ -116,7 +116,10 @@ All three sets are defined at lines ~588–590 of `Ytel_Daily_Monitor_ADP.html`.
 - Split into: Enrolled Clients vs Other Calls; filterable by campaign
 - Shows: phone number, enrolled debt (if any), agent who dropped the call, campaign
 - Example: DPC at 07:27 → outbound calls at 07:29 and 07:30 → **not flagged** (follow-up exists)
-- Implementation: `dpcEvents[phone]` = all DPC timestamps; `nonDpcTs[phone]` = all non-DPC timestamps; flag if any DPC has no later non-DPC call
+- Implementation: `dpcEvents[phone]` = all DPC timestamps+sec; `nonDpcTs[phone]` = all non-DPC timestamps; flag if any DPC has no later non-DPC call
+- `dpcFlagged[phone].secs` = array of `length_in_sec` for each unfollowed DPC event; `dpcData[].sec` = max sec across those events
+- **Duration filter** (4 buttons in card header): All | <1 min (sec<60) | 1–2 min (60≤sec<120) | >2 min (sec≥120)
+  - `window._dpcSecFilter` holds current selection; `setDpcSec(val)` updates highlight + calls `renderDpcDrops()`
 
 ## Agent Performance Table
 
