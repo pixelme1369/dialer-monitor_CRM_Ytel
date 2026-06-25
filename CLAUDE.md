@@ -15,7 +15,8 @@ No framework, no build step — vanilla JS + SheetJS 0.18.5 + Chart.js 4.4.0 via
 - Keep explanations under 5 sentences.
 - Ask before changing business logic.
 - Run JS syntax check after edits: `node -e "const fs=require('fs');const h=fs.readFileSync('Ytel_Daily_Monitor_ADP.html','utf8');const s=h.match(/<script>([\s\S]*?)<\/script>/g);s.forEach((b,i)=>{try{new Function(b.replace(/<\/?script>/g,''));console.log('OK',i);}catch(e){console.log('ERR',i,e.message);}});"`
-- Always push to branch `claude/confident-allen-ddaf00` on `pixelme1369/Ytel_Daily_Monitor_ADP`, then merge to `main` when asked.
+- Always push to branch `claude/blissful-curie-pvg620` on `pixelme1369/Ytel_Daily_Monitor_ADP`, then merge to `main` when asked.
+- **Always update CLAUDE.md after every code change** to keep it current.
 
 ## Agent Roles
 
@@ -28,13 +29,48 @@ const OPENERS = new Set([...]);    // openers — show Opener tag, show >2min % 
 Agents not in any set show no role tag.
 All three sets are defined at lines ~588–590 of `Ytel_Daily_Monitor_ADP.html`.
 
+### Agent Name Matching
+
+- All role lookups are done with `.toLowerCase()` — names in the sets must be lowercase
+- When an agent's name has a known alternate spelling in the data, **add both spellings** to the set
+  - Example: `'jon stultz'` and `'jon stults'` are both in OPENERS because the data has been seen with both spellings
+- When a user reports an agent is "missing from the report", check if it's a spelling mismatch before assuming the agent isn't in the set
+
 ## Enrollment Logic
 
 - One enrollment per unique phone number per day
 - `Cordoba Enrolled Date` must match the analysis date
-- Credit goes to the agent named in **`Assigned To`** column (if populated)
-- Fallback: agent with the latest call timestamp to that phone on that day
+- **Agent credit** goes to the agent named in **`Assigned To`** column (if populated); fallback: agent with the latest call timestamp to that phone on that day
 - Debt comes from `Enrolled Debt` column on the enrolled row
+
+### Campaign Attribution (separate from agent credit)
+
+- Enrollment is credited to the **campaign of the first call to that phone on that day**
+- Rationale: if a lead first came in on TransferK, was transferred to an agent on AGENTDIRECT, and closed on campaign 1000 (agent outbound), it counts as a **TransferK enrollment**
+- Campaign `1000` = agent outbound dialer — not a source campaign
+- Implementation: `enrolledFirstCallTs[phone]` = min timestamp across all calls for that phone; `r._enrolled = true` only on that first-call row
+- **Agent credit and campaign attribution are independent** — agent credit uses `agentEnrollCredit` (from `enrolledPhoneAgent`), campaign attribution uses `_enrolled` flag on the first-call row
+
+### Enrolled column in Campaign / Queue Breakdown
+
+- `_enrolled` is set on exactly one row per enrolled phone (the first call row)
+- This prevents double-counting across campaigns (old bug: every row for the phone had `_enrolled=true`, so every campaign the phone touched counted +1)
+- A warning note (⚠️) is shown in the section header — hover it for the full explanation
+- The displayed number uses `s.enroll` (raw row count); `s.enrolledPhones` (Set) is used for the clickable phone modal
+
+### Enrolled column in Agent Performance Table
+
+- Uses `agentEnrollCredit[k].count` (unique enrolled phones per agent) — **never** `d.enr`
+- `d.enr` is row-based and can be lower than actual credit when `Assigned To` credits an agent whose rows are not the max-timestamp rows
+- The phone list shown on click comes from `agentEnrollPhones[k]` — always in sync with `credit.count`
+- Implementation: `enr: credit.count, debt: credit.debt` in `buildRowsFromMap` (line ~619)
+
+### Campaign `1000` and Agent Outbound
+
+- Campaign `1000` = agent outbound dialer (closer calls out to client directly)
+- It is NOT a source campaign — do not attribute enrollments to it
+- If a phone first came in on TransferK, then the closer called back on `1000`, the enrollment belongs to **TransferK**
+- This is correctly handled by the first-call attribution rule above
 
 ## Hourly Breakdown Logic
 
@@ -47,6 +83,25 @@ All three sets are defined at lines ~588–590 of `Ytel_Daily_Monitor_ADP.html`.
 - Phone is only flagged if **zero follow-up activity** occurred after the timeout
 - Split into: Enrolled Clients (have `Cordoba Enrolled Date`) vs Other Calls
 - Filterable by campaign dropdown
+
+## DPC — Dropped Calls Never Called Back
+
+- `DPC` = Dropped Call dispo — the call connected but dropped unexpectedly
+- **Per-event logic**: for each DPC event on a phone, check if any non-DPC call occurred after that DPC's timestamp
+- If a DPC has no non-DPC follow-up → that phone is flagged (even if other DPCs on same phone were followed up)
+- Card is hidden when no flagged phones exist
+- Split into: Enrolled Clients vs Other Calls; filterable by campaign
+- Shows: phone number, enrolled debt (if any), agent who dropped the call, campaign
+- Example: DPC at 07:27 → outbound calls at 07:29 and 07:30 → **not flagged** (follow-up exists)
+- Implementation: `dpcEvents[phone]` = all DPC timestamps; `nonDpcTs[phone]` = all non-DPC timestamps; flag if any DPC has no later non-DPC call
+
+## Agent Performance Table
+
+Time bracket columns (in order): Short% ≤30s | <2 min | **1–2 min** | 5–10 min | 10–15 min | 15–20 min | 20–30 min | 30+ min | Avg Talk | Total Talk | Enrolled | Debt $ | Conv%
+
+- `1–2 min` = 60 ≤ sec < 120 (orange color) — added to highlight calls that had real contact but were short
+- `<2 min` = all calls under 120s (unchanged — includes the 1–2 min range)
+- Bracket data tracked in: `agentMap`, `agentDirMap`, `agentCampDataMap`, hourly map — all use field `r1to2m`
 
 ## Agent Call Funnel Table
 
@@ -124,7 +179,29 @@ Ranking table below the summary. Shows every opener agent sorted by transfer rat
 
 ## Branch & Deploy
 
-- Development branch: `claude/confident-allen-ddaf00`
+- Development branch: `claude/blissful-curie-pvg620`
 - Repo: `pixelme1369/Ytel_Daily_Monitor_ADP`
 - Merge to `main` when user asks to ship
 - No CI, no build — just open the HTML file in Chrome
+
+## Call Flow Patterns (for interpreting raw data)
+
+Understanding how calls flow helps debug enrollment and campaign attribution:
+
+| Pattern | What it means |
+|---------|---------------|
+| Phone has CLtrns on TransferK → SALE on AGENTDIRECT | Opener transferred to closer's direct queue; enrollment = TransferK |
+| Phone has CLtrns on TransferK → N/SALE on AGENTDIRECT → SALE on 1000 | Opener transferred → closer missed then called back outbound; enrollment = TransferK |
+| `Assigned To` populated | Explicit agent credit override; always use this over `full_name` for enrollment credit |
+| `campaign_id = 1000` | Agent outbound dialer — not a source campaign |
+| `campaign_id = AGENTDIRECT` | Call routed to a specific agent's queue (post-transfer or callback) |
+| `campaign_id = TransferK` | Inbound queue from opener transfer — the originating source |
+| `status = CLtrns` | Call Center Transfer — opener handed off to a closer |
+| `status = CC` | Current Client — post-enrollment follow-up call |
+| `status = SALE` | Enrollment closed |
+| `status = N` | No Answer |
+| `status = TIMEOT` | Caller timed out in queue — tracked for Missed Callbacks |
+| `status = DPC` | Dropped Call — tracked for DPC Never Called Back section |
+| `status = DROP` | System drop — counted in Drops column of campaign breakdown |
+| `status = A` | Answering Machine |
+| `status = DNC` | Do Not Call |
