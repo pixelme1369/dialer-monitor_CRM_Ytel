@@ -194,8 +194,12 @@ tbody td:first-child{text-align:left;font-weight:600;color:var(--text)}
       <div class="sb-status" id="mergedStatus"></div>
     </div>
     <div class="sb-field">
-      <label>Analyze date</label>
-      <input type="date" id="targetDate" value="">
+      <label>From</label>
+      <input type="date" id="fromDate" value="">
+    </div>
+    <div class="sb-field">
+      <label>To</label>
+      <input type="date" id="toDate" value="">
     </div>
     <button class="sb-btn" onclick="runAnalysis()">&#9654; Run Analysis</button>
     <button class="sb-btn ghost" onclick="clearAll()">Clear</button>
@@ -1174,19 +1178,25 @@ function clearAll(){
 // ══ ANALYSIS ════════════════════════════════════════════════════════════════
 function runAnalysis(){
   if(!mergedRaw){ showToast('Upload the merged file first'); return; }
-  const dateStr=document.getElementById('targetDate').value;
-  if(!dateStr){ showToast('Pick a date to analyze'); return; }
+  const fromStr=document.getElementById('fromDate').value;
+  const toStr=document.getElementById('toDate').value;
+  if(!fromStr||!toStr){ showToast('Pick a date range'); return; }
+  if(fromStr>toStr){ showToast('From date must be ≤ To date'); return; }
 
   const calls=mergedRaw.filter(r=>{
     const d=getDateStr(r['call_date']||r['Call Date']||r['date']||r['Date']||'');
-    return d===dateStr;
+    return d>=fromStr && d<=toStr;
   });
-  if(calls.length===0){ showToast('No calls found for '+dateStr+' — check the date'); return; }
+  if(calls.length===0){ showToast('No calls found in that date range'); return; }
+
+  const days=[...new Set(calls.map(r=>getDateStr(r['call_date']||r['date']||'')).filter(Boolean))].length;
+  const dateStr=fromStr===toStr?fromStr:fromStr+' → '+toStr;
 
   const enrolledPhoneAgent={};
   calls.forEach(r=>{
     const v=r['Cordoba Enrolled Date']||r['Enrolled Date']||'';
-    if(getDateStr(v)!==dateStr) return;
+    const ds=getDateStr(v);
+    if(!ds||ds<fromStr||ds>toStr) return;
     const phone=(r['phone_number']||r['phone_number_dialed']||'').trim();
     if(!phone) return;
     const ts=parseTs(r['call_date']||r['date']||'');
@@ -1214,7 +1224,7 @@ function runAnalysis(){
 
   document.getElementById('hdrDate').textContent=dateStr;
   document.getElementById('filterHint').textContent=
-    calls.length.toLocaleString()+' calls · '+totalEnrolledCount+' enrollments on '+dateStr;
+    calls.length.toLocaleString()+' calls · '+totalEnrolledCount+' enrollments'+(days>1?' · '+days+' days':'');
 
   buildDashboard(calls, enrolledPhones, agentEnrollCredit, agentEnrollPhones, totalEnrolledCount, totalDebtSum, dateStr, enrolledPhoneAgent);
 }
@@ -2186,7 +2196,9 @@ el.addEventListener('drop',e=>{
 });
 
 // Init
-document.getElementById('targetDate').value=new Date().toISOString().slice(0,10);
+const _today=new Date().toISOString().slice(0,10);
+document.getElementById('fromDate').value=_today;
+document.getElementById('toDate').value=_today;
 renderRoleEditor();
 initCollapse();
 initNav();
