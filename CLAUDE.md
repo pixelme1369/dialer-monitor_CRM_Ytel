@@ -2,8 +2,49 @@
 
 ## Project
 
-Single-file HTML call center dashboard: `Ytel_Daily_Monitor_ADP.html`
-No framework, no build step — vanilla JS + SheetJS 0.18.5 + Chart.js 4.4.0 via CDN.
+Vanilla JS call center dashboard suite — no framework, no build step.
+SheetJS 0.18.5 + Chart.js 4.4.0 via CDN.
+
+| File | Purpose |
+|------|---------|
+| `Ytel_Daily_Monitor_ADP.html` | Original single-date dashboard (production) |
+| `Ytel_Daily_Monitor_v2.html` | Redesigned dashboard with sidebar nav, date range, export CSV, role editor |
+| `Agent_Performance_Range.html` | Standalone agent performance report with date range picker |
+
+---
+
+## v2 Dashboard (`Ytel_Daily_Monitor_v2.html`)
+
+### Layout
+Left sidebar (220px fixed) + main content area. Sidebar contains: logo, file upload drag-drop zone, `fromDate`/`toDate` pickers, Run Analysis button, and nav links.
+
+### Color Palette
+- Sidebar: `#0F172A` | Accent: `#6366F1` | Success: `#10B981` | Danger: `#EF4444` | Warning: `#F59E0B`
+- Background: `#F8FAFC` | Cards: `#FFFFFF` with `border-radius:12px`
+
+### New Features vs Original
+| Feature | Details |
+|---------|---------|
+| Date range | `fromDate`/`toDate` pickers; `runAnalysis()` filters `d>=fromStr&&d<=toStr`; enrollment date must fall within range |
+| Export CSV | `exportTable(tableId, filename)` — reads DOM table, converts to CSV, downloads via Blob. Buttons on Agent, Funnel, Campaign cards |
+| Role editor | Settings section: textareas (one name/line) for Closers / Openers / Retention; `saveRoles()` updates Sets in memory (session-only); `renderRoleEditor()` populates textareas |
+| Collapsible sections | Each card has ▼/▶ toggle; state persisted in `localStorage` keyed `collapse:<sectionId>` |
+| Multi-file upload | Merged into `mergedRaw[]` — analyze data from multiple XLSX files at once |
+
+### Script Regions (in order)
+`CONFIG` → `UTILS` → `STATS` → `FILE I/O` → `NORMALIZATION` → `ENROLLMENT` → `ACCUMULATION` → `ANALYSIS` → `RENDER AGENTS` → `RENDER CAMPAIGNS` → `RENDER OPENERS` → `RENDER ALERTS` → `RENDER KPI` → `CHARTS` → `FILTERS` → `EXPORT` → `ROLE EDITOR` → `UI EVENTS` → `INIT`
+
+Key refactors: `newCallStats()` factory replaces 9 inline duplicates; `accumulate(d,r)` replaces 18 repeated bucketing blocks.
+
+### Sections Preserved
+KPIs · Issues Detected · Hour Chart · Dispo list · Agent Performance (incl. 1–2min bracket, hourly sub-rows) · Agent Funnel · Agent Rankings · Campaign Breakdown · Top 5 Numbers · VDCL Analysis · Drops by Hour · Missed Callbacks · DPC Drops (incl. sec filter) · Openers Transfer Breakdown
+
+### Syntax Check (v2)
+```
+node -e "const fs=require('fs');const h=fs.readFileSync('Ytel_Daily_Monitor_v2.html','utf8');const s=h.match(/<script>([\s\S]*?)<\/script>/g);s.forEach((b,i)=>{try{new Function(b.replace(/<\/?script>/g,''));console.log('OK',i);}catch(e){console.log('ERR',i,e.message);}});"
+```
+
+---
 
 ## Campaign Filter UI — Multi-Select Dropdowns
 
