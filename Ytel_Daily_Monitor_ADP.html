@@ -943,21 +943,20 @@ function analyzeAgents(agents){
     }
     return {a,sev,msgs,action,role};
   });
-  const nStrong=insights.filter(i=>i.sev==='strong').length;
   const nCoach=insights.filter(i=>i.sev==='coach').length;
   const nWatch=insights.filter(i=>i.sev==='watch').length;
-  const header='<div class="fca-header">Analysis — '+insights.length+' agents &nbsp;'
-    +'<span class="fca-badge strong">✅ Top performers: '+nStrong+'</span>'
+  const actionable=insights.filter(i=>i.sev!=='strong');
+  const header='<div class="fca-header">Analysis — '+actionable.length+' agents flagged &nbsp;'
     +'<span class="fca-badge coach">🔴 Needs coaching: '+nCoach+'</span>'
     +'<span class="fca-badge watch">⚠ Watch list: '+nWatch+'</span>'
     +'</div>';
-  const cards=insights.map(({a,sev,msgs,action,role})=>'<div class="fca-card">'
+  const cards=actionable.map(({a,sev,msgs,action,role})=>'<div class="fca-card">'
     +'<div class="fca-agent">'+a.name+(role?' <span style="font-size:10px;color:var(--text-muted)">('+role+')</span>':'')+'<br>'
-    +'<span class="fca-badge '+sev+'">'+(sev==='strong'?'✅ Strong':sev==='coach'?'🔴 Coaching':'⚠ Watch')+'</span></div>'
+    +'<span class="fca-badge '+sev+'">'+(sev==='coach'?'🔴 Coaching':'⚠ Watch')+'</span></div>'
     +'<div class="fca-text">'+msgs.map(m=>'<div>'+m+'</div>').join('')
     +(action?'<div class="fca-action">→ '+action+'</div>':'')
     +'</div></div>').join('');
-  el.innerHTML='<div class="fca-wrap">'+header+cards+'</div>';
+  el.innerHTML=actionable.length?'<div class="fca-wrap">'+header+cards+'</div>':'';
 }
 let _fcRoleFilter='all';
 function filterFunnelChart(type){
