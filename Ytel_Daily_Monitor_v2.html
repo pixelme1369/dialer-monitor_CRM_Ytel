@@ -915,69 +915,73 @@ function renderFunnelChart(rows){
 }
 function analyzeAgents(agents){
   const el=document.getElementById('funnelChartAnalysis');
-  if(!el){ return; }
+  if(!el) return;
   if(!agents||!agents.length){ el.innerHTML=''; return; }
   const insights=agents.map(a=>{
-    const shortPct=a.calls?a.short/a.calls*100:0;
-    const gt2mPct =a.calls?a.gt2m/a.calls*100:0;
-    const longPct =a.calls?(a.r10to15+a.r15to20+a.r20to30+a.gt30m)/a.calls*100:0;
-    const convRate=a.gt2m>0?a.enr/a.gt2m:0;
-    const isOpener=OPENERS.has(a.name.toLowerCase());
     const isCloser=CLOSERS.has(a.name.toLowerCase());
+    const isOpener=OPENERS.has(a.name.toLowerCase());
     const role=isCloser?'Closer':isOpener?'Opener':'';
-    let sev='watch', msgs=[], action='';
-    if(shortPct>65){
+    const dead   =a.short;
+    const early  =Math.max(0,a.lt2m-a.short);
+    const mid    =Math.max(0,a.calls-a.lt2m-a.r5to10-a.r10to15-a.r15to20-a.r20to30-a.gt30m);
+    const deep5  =a.r5to10;
+    const deep10 =a.r10to15;
+    const deep15 =a.r15to20;
+    const deep20 =a.r20to30;
+    const deep30 =a.gt30m;
+    const shortPct =a.calls?a.short/a.calls*100:0;
+    const lt2mPct  =a.calls?a.lt2m/a.calls*100:0;
+    const midPct   =a.calls?(mid+deep5)/a.calls*100:0;
+    const longPct  =a.calls?(deep15+deep20+deep30)/a.calls*100:0;
+    const veryLong =a.calls?(deep20+deep30)/a.calls*100:0;
+    const bkts=[{l:'≤30s',n:dead},{l:'30s–2min',n:early},{l:'2–5min',n:mid},{l:'5–10min',n:deep5},
+                {l:'10–15min',n:deep10},{l:'15–20min',n:deep15},{l:'20–30min',n:deep20},{l:'30+min',n:deep30}];
+    const dom=bkts.reduce((a,b)=>b.n>a.n?b:a);
+    const domPct=(dom.n/a.calls*100).toFixed(0);
+    let sev=null, msgs=[], action='';
+    if(shortPct>60){
       sev='coach';
-      msgs.push(shortPct.toFixed(0)+'% of calls end in ≤30s — barely past hello.');
-      action='Pull call recordings and review the opening 30 seconds. Script may need rework.';
-    } else if(shortPct>40){
+      msgs.push(shortPct.toFixed(0)+'% of calls die in ≤30s. Can\'t get past the greeting.');
+      action='Review the first 30 seconds of recordings. Likely a script or cold-open issue.';
+    }
+    if(lt2mPct>65){
       sev='coach';
-      msgs.push(shortPct.toFixed(0)+'% short calls — struggles to hold conversations past the opening.');
-      action='Focus on engagement openers. Target: get short-call rate below 40%.';
+      msgs.push(lt2mPct.toFixed(0)+'% of calls end before 2 minutes. Makes contact but loses the lead fast.');
+      if(!action) action='Focus on the first 2 minutes — ask more questions to keep the lead engaged.';
     }
-    if(longPct>25&&convRate<0.05&&a.enr<3){
+    if(midPct>55&&veryLong<10){
       sev='coach';
-      msgs.push('Gets into long calls ('+longPct.toFixed(0)+'% >10 min) but Conv% is '+(convRate*100).toFixed(1)+'% — not closing.');
-      action=(action?action+' ':'')+'Review objection-handling and closing technique on long calls.';
+      msgs.push('Majority of calls ('+domPct+'%) cluster in the '+dom.l+' zone but rarely push past 10 min. Gets into conversations but can\'t sustain them.');
+      if(!action) action='Practice extending calls past 10 min. Role-play handling the "I need to think about it" moment.';
     }
-    if(a.enr===0&&a.calls>=10&&shortPct<=65){
-      sev='coach';
-      msgs.push('Zero enrollments from '+a.calls+' calls.');
-      action=(action?action+' ':'')+'Check lead quality and whether full pitch is being delivered.';
+    if(longPct<15&&shortPct<40){
+      if(!sev) sev='watch';
+      msgs.push('Only '+longPct.toFixed(0)+'% of calls reach 15+ min. Conversations start but don\'t go deep enough.');
+      if(!action) action='Work on conversation depth. Once past 5 min, push for the full qualification.';
     }
-    if(convRate>=0.10&&a.enr>=3){
-      sev='strong';
-      const per=Math.round(a.gt2m/a.enr);
-      msgs.push('Conv% '+(convRate*100).toFixed(1)+'% — enrolling 1 in every '+per+' quality calls.');
-      if(longPct>20) msgs.push(longPct.toFixed(0)+'% of calls exceed 10 min — solid conversation depth.');
-      action='';
-    } else if(convRate>=0.05&&sev!=='coach'){
-      sev='watch';
-      msgs.push('Conv% '+(convRate*100).toFixed(1)+'% — solid, room to improve.');
-      action='Push Conv% above 10% by converting more of the calls already reaching 5+ min.';
+    if(veryLong<10&&shortPct<40&&longPct>=15){
+      if(!sev) sev='watch';
+      msgs.push('Only '+veryLong.toFixed(0)+'% of calls exceed 20 min — the zone where deals tend to close. Needs to push conversations further.');
+      if(!action) action='When a call reaches 15 min, focus on keeping momentum rather than wrapping up.';
     }
-    if(isOpener&&a.enr===0&&shortPct<50){
-      msgs.push('Opener profile: short calls expected. Verify transfer rate in Openers section.');
-    }
-    if(!msgs.length){
-      msgs.push(gt2mPct.toFixed(0)+'% of calls exceed 2 min. Avg talk: '+fmtDur(a.avg)+'.');
-    }
+    if(!sev) return null;
+    msgs.unshift(a.name.split(' ')[0]+'\'s calls are mostly concentrated in the '+dom.l+' bracket ('+domPct+'% of '+a.calls+' calls).');
     return {a,sev,msgs,action,role};
-  });
+  }).filter(Boolean);
   const nCoach=insights.filter(i=>i.sev==='coach').length;
   const nWatch=insights.filter(i=>i.sev==='watch').length;
-  const actionable=insights.filter(i=>i.sev!=='strong');
-  const header='<div class="fca-header">Analysis — '+actionable.length+' agents flagged &nbsp;'
+  if(!insights.length){ el.innerHTML=''; return; }
+  const header='<div class="fca-header">Analysis — '+insights.length+' agents flagged &nbsp;'
     +'<span class="fca-badge coach">🔴 Needs coaching: '+nCoach+'</span>'
     +'<span class="fca-badge watch">⚠ Watch list: '+nWatch+'</span>'
     +'</div>';
-  const cards=actionable.map(({a,sev,msgs,action,role})=>'<div class="fca-card">'
+  const cards=insights.map(({a,sev,msgs,action,role})=>'<div class="fca-card">'
     +'<div class="fca-agent">'+a.name+(role?' <span style="font-size:10px;color:var(--text-muted)">('+role+')</span>':'')+'<br>'
     +'<span class="fca-badge '+sev+'">'+(sev==='coach'?'🔴 Coaching':'⚠ Watch')+'</span></div>'
     +'<div class="fca-text">'+msgs.map(m=>'<div>'+m+'</div>').join('')
     +(action?'<div class="fca-action">→ '+action+'</div>':'')
     +'</div></div>').join('');
-  el.innerHTML=actionable.length?'<div class="fca-wrap">'+header+cards+'</div>':'';
+  el.innerHTML='<div class="fca-wrap">'+header+cards+'</div>';
 }
 let _fcRoleFilter='all';
 function filterFunnelChart(type){
